@@ -45,18 +45,30 @@ const NameFetcher = {
   },
 
   // 將請求加入佇列
-  enqueue: function(handle, callback, isBackgroundUpdate = false) {
+  enqueue: function(handle, callback, isBackgroundUpdate = false, timestamp = Date.now()) {
     if (this.isCircuitBreakerActive) return; // 熔斷中，拒絕新請求
-    if (this.activeRequests.has(handle)) return; // 請求已存在，去重
+
+    const task = { handle, callback, ts: timestamp };
+    
+    const existingIndex = this.queue.high.findIndex(t => t.handle === handle);
+
+    if (existingIndex !== -1) {
+        // [情況 A] 已在排隊：從舊位置移除，準備重新加入到最前面
+        this.queue.high.splice(existingIndex, 1);
+        Logger.info(`[Fetcher] 優先權提升: ${handle} (重新出現)`);
+    } else if (this.activeRequests.has(handle)) {
+        // [情況 B] 正在執行中 (Processing)：無法插隊，直接返回
+        return;
+    }
     
     this.activeRequests.add(handle);
-    const task = { handle, callback };
-    
-    // 依據優先級分流
+
     if (isBackgroundUpdate) {
-        this.queue.low.push(task);
+        this.queue.low.push(task); // 背景任務維持 FIFO 或自行決定
     } else {
-        this.queue.high.push(task);
+        // 使用 unshift 代替 push，將最新的任務直接放到陣列最前面 (LIFO)
+        // 這樣 startQueue 的 shift() 取出時，就會先取出這一個
+        this.queue.high.unshift(task);
     }
     
     this.startQueue();

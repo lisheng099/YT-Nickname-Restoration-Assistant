@@ -302,7 +302,7 @@ class PageScanner {
       const doFetch = () => {
           NameFetcher.enqueue(handle, (h, res) => {
               this.flushUpdates(h, res);
-          }, isBackground);
+          }, isBackground, Date.now());
       };
 
       if (isBackground) {
@@ -340,6 +340,77 @@ class PageScanner {
           displayName = chars.slice(0, this.maxLength).join("") + "...";
       }
       
+      // MODIFIED: 針對投票欄位 (Mixed Content) 採用「上方插入」策略
+      if (el.dataset.rnSuffix) {
+          const parent = el.parentNode;
+
+          // 檢查：是否已經包裹過了？
+          // 如果 parent 有我們特定的 class，代表已經處理過結構
+          if (parent.classList.contains('rn-poll-wrapper')) {
+              // 只需要更新裡面的名字節點
+              const nameNode = parent.querySelector('.rn-poll-inserted-name');
+              if (nameNode) {
+                  nameNode.textContent = displayName;
+                  TooltipManager.attachData(nameNode, handle, fullName, data.subs, data.isExpired);
+              }
+              // 標記 el 狀態
+              el.dataset.rnReplaced = "yes";
+              return;
+          }
+
+          // --- 尚未包裹，開始進行 DOM 結構重組 ---
+
+          // 1. 建立 Wrapper
+          const wrapper = document.createElement('div');
+          wrapper.className = 'rn-poll-wrapper';
+          wrapper.style.display = 'flex';
+          wrapper.style.flexDirection = 'column'; // 內部垂直排列
+          wrapper.style.justifyContent = 'center';
+          wrapper.style.alignItems = 'flex-start';
+          
+          // 2. 處理邊距 (Margin)
+          // 投票欄位通常文字與頭像有間距 (Margin-left)，我們要將這個間距移到 Wrapper 上
+          // 否則頭像會貼著 Wrapper，而文字在 Wrapper 裡面縮排，會很怪
+          const computedStyle = window.getComputedStyle(el);
+          wrapper.style.marginLeft = computedStyle.marginLeft;
+          wrapper.style.marginRight = computedStyle.marginRight;
+          
+          // 清除原本元素的邊距，因為它現在在 Wrapper 內部
+          el.style.marginLeft = '0px';
+          el.style.marginRight = '0px';
+
+          // 3. 建立 Name Node (新名字)
+          const nameNode = document.createElement('div');
+          nameNode.className = 'rn-poll-inserted-name';
+          nameNode.textContent = displayName;
+          
+          // 複製字體樣式
+          nameNode.style.color = computedStyle.color;
+          nameNode.style.fontFamily = computedStyle.fontFamily;
+          nameNode.style.fontSize = computedStyle.fontSize;
+          nameNode.style.fontWeight = "bold"; 
+          nameNode.style.lineHeight = "1.4"; 
+          nameNode.style.marginBottom = "2px"; 
+          // 綁定 Tooltip
+          TooltipManager.attachData(nameNode, handle, fullName, data.subs, data.isExpired);
+
+          // 4. 執行插入與搬移
+          // (A) 將 Wrapper 插在原本 el 的前面
+          parent.insertBefore(wrapper, el);
+          // (B) 將新名字放入 Wrapper
+          wrapper.appendChild(nameNode);
+          // (C) 將原本的 metadata 元素 (el) 移動到 Wrapper 內部 (這會自動從原父層移除)
+          wrapper.appendChild(el);
+
+          // 標記
+          el.dataset.rnReplaced = "yes";
+          
+          return; 
+          return; // 結束，不執行下方的 renderText (取代) 邏輯
+      }
+      // =======================================================
+
+      // 一般情況：直接取代內容
       TooltipManager.renderText(el, handle, displayName, data.subs, data.isExpired);
       
       if (fullName !== displayName) {
