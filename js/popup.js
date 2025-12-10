@@ -6,7 +6,8 @@
 const { CACHE_KEY, TTL, SETTINGS_KEY, CLICK_TO_COPY_KEY, FETCH_SPEED_KEY, DEFAULT_MAX_LENGTH } = window.AppConfig;
 const countEl = document.getElementById("countText");
 const openBtn = document.getElementById("openManagerBtn");
-const manualBtn = document.getElementById("openManualBtn"); // 新增
+const manualBtn = document.getElementById("openManualBtn");
+const readmeBtn = document.getElementById("openReadmeBtn");
 
 // UI 元素參考
 const maxLengthInput = document.getElementById("maxLengthInput");
@@ -77,11 +78,25 @@ openBtn.addEventListener("click", () => {
   chrome.tabs.create({ url: "manager.html" });
 });
 
-// 新增：開啟說明書頁面
+// 開啟說明書頁面
 if (manualBtn) {
   manualBtn.addEventListener("click", () => {
     chrome.tabs.create({ url: "manual.html" });
   });
+}
+
+if (readmeBtn) {
+  readmeBtn.addEventListener("click", () => {
+    // 開啟README.txt
+    chrome.tabs.create({ url: "README.txt" });
+  });
+}
+
+// 動態載入版本號
+const manifestData = chrome.runtime.getManifest();
+const versionSpan = document.getElementById("appVersion");
+if (versionSpan) {
+    versionSpan.textContent = "v" + manifestData.version;
 }
 
 // 初始化執行

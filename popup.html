@@ -43,10 +43,30 @@
       background: #4caf50; color: white; border: none; padding: 6px; font-size: 12px;
     }
     .btn-save:hover { background: #43a047; }
+
+    .footer-link {
+      cursor: pointer;
+      color: #999;
+      font-size: 11px;
+      text-decoration: none;
+      font-family: monospace;
+      transition: color 0.2s;
+    }
+    .footer-link:hover {
+      color: #666;
+      text-decoration: underline;
+    }
+    
+    .footer-container {
+      margin-top: 12px; 
+      text-align: center; 
+      border-top: 1px solid #eee; 
+      padding-top: 8px;
+    }
   </style>
 </head>
 <body>
-  <h1>YT 暱稱還原助手 <span class="badge">v1.0.3</span></h1>
+  <h1>YT 暱稱還原助手 <span class="badge" id="appVersion"></span></h1>
   
   <div class="status-card">
     <span id="countText" class="status-num">...</span>
@@ -82,9 +102,15 @@
   </button>
   
   <button id="openManualBtn" class="btn" style="margin-top: 8px; border-color: #bbdefb; color: #1565c0; background: #e3f2fd;">
-    📖 使用說明書 & 關於
+    📖 使用說明書
   </button>
-  
+
+  <div class="footer-container">
+    <span id="openReadmeBtn" class="footer-link">
+      📜 關於 & 修改紀錄
+    </span>
+  </div>
+
   <script src="js/config.js"></script>
   <script src="js/popup.js"></script>
 </body>

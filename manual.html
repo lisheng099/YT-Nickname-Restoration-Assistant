@@ -61,7 +61,7 @@
 <body>
 
 <div class="container">
-  <h1>📺 YT 暱稱還原助手 <span class="tag">v1.0.3</span></h1>
+<h1>📺 YT 暱稱還原助手 <span class="tag" id="manualVersion"></span></h1>
 
   <div class="intro-card">
     <strong>📖 簡介</strong><br>
@@ -132,6 +132,11 @@
   </div>
 
 </div>
+
+<script>
+  document.getElementById('manualVersion').innerText = 'v' + chrome.runtime.getManifest().version;
+</script>
+</body>
 
 </body>
 </html>
