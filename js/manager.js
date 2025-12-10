@@ -291,7 +291,7 @@ async function handleExport() {
     // 建立新的匯出結構
     const exportObj = {
         meta: {
-            version: "1.0.3",
+            version: chrome.runtime.getManifest().version, // 改成動態讀取
             generatedAt: Date.now(),
             checksum: checksum
         },
