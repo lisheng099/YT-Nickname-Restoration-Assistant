@@ -291,7 +291,7 @@ async function handleExport() {
     // 建立新的匯出結構
     const exportObj = {
         meta: {
-            version: "1.0.2",
+            version: "1.0.3",
             generatedAt: Date.now(),
             checksum: checksum
         },
