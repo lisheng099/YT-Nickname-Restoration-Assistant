@@ -189,123 +189,61 @@ const NameFetcher = {
 
   // 執行單次爬蟲請求
   performFetch: async function(handle) {
-    let timeoutTimer = null;
-    try {
-      const cleanHandle = handle.replace(/^@/, '');
-      const handleAnchor = handle.startsWith("@") ? handle : "@" + handle;
-      const targetUrl = `https://www.youtube.com/@${encodeURIComponent(cleanHandle)}`;
-      
-      // 設定請求逾時 (Timeout) 為 25 秒
-      const controller = new AbortController();
-      timeoutTimer = setTimeout(() => controller.abort(), 25000);
-
-      const response = await fetch(targetUrl, { 
-          credentials: "include", // 攜帶 Cookies 以獲取完整資訊
-          signal: controller.signal, 
-          headers: {
-              "Cache-Control": "no-cache", 
-              "Accept-Language": "en-US,en;q=0.9" // 強制英文介面以利正則解析
+    return new Promise((resolve, reject) => { // 參數改為 resolve, reject
+      // 傳送訊息給 background.js
+      chrome.runtime.sendMessage({ 
+          type: "FETCH_CHANNEL_INFO", 
+          handle: handle 
+      }, (response) => {
+          
+          // 1. Runtime 連線錯誤 (Extension 異常/斷線) -> 視為嚴重錯誤，拋出 reject
+          if (chrome.runtime.lastError) {
+              Logger.red("Background communication error:", chrome.runtime.lastError.message);
+              reject(new Error(chrome.runtime.lastError.message)); 
+              return;
           }
+
+          // 2. Response 為空 -> 視為錯誤
+          if (!response) {
+              reject(new Error("Empty response"));
+              return;
+          }
+
+          // 3. 處理 429 Too Many Requests
+          if (response.status === 429) {
+              this.handleRateLimit(); // 觸發熔斷
+              resolve(null); // 已處理熔斷，此次回傳空即可
+              return;
+          }
+
+          // 4. 處理其他邏輯錯誤
+          if (!response.success || response.error) {
+              // 如果是 "Name not found" (404)，這是正常業務結果，不計入錯誤
+              if (response.error === "Name not found") {
+                  resolve(null);
+              } else {
+                  // 其他如網路中斷、Redirect 失敗等 -> 拋出 reject 讓外層計數
+                  reject(new Error(response.error));
+              }
+              return;
+          }
+
+          // 5. 資料後處理 (成功)
+          let finalName = response.nameRaw;
+          // decodeHtmlEntities 來自 utils.js，已在 content_scripts 載入，可直接使用
+          if (typeof decodeHtmlEntities === "function") {
+              finalName = decodeHtmlEntities(finalName);
+          }
+          if (finalName === "YouTube") { resolve(null); return; }
+
+          let finalSubs = 0;
+          if (response.subsRaw) {
+              finalSubs = this.parseSubsString(response.subsRaw);
+          }
+
+          resolve({ name: finalName, subs: finalSubs });
       });
-
-      // 處理 HTTP 429 (Too Many Requests)
-      if (response.status === 429) {
-          this.handleRateLimit(); 
-          clearTimeout(timeoutTimer);
-          return null;
-      }
-
-      if (!response.ok) {
-          // 其他 HTTP 錯誤，視為網路異常並增加錯誤計數
-          this.errorCount++;
-          clearTimeout(timeoutTimer);
-          return null;
-      }
-
-      // === 串流解析 (Stream Parsing) ===
-      // 優化策略：不需下載完整 HTML，讀取到所需資訊 (名稱、訂閱數) 後即中斷連線。
-      // 效益：大幅節省頻寬與記憶體使用。
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      let buffer = "";
-      let resultName = null;
-      let resultSubs = 0;
-      let lastCheckIndex = 0;
-      
-      while (true) {
-          const { done, value } = await reader.read();
-          if (done) break; 
-          
-          buffer += decoder.decode(value, { stream: true });
-          
-          // 解析頻道名稱 (優先檢查 Meta Tags)
-          if (!resultName) {
-              const ogMatch = buffer.match(/<meta\s+property="og:title"\s+content="([^"]+)">/i);
-              if (ogMatch) {
-                  let raw = ogMatch[1];
-                  resultName = raw.replace(/\s*-\s*YouTube$/, "").trim();
-              }
-              if (!resultName) {
-                  const twMatch = buffer.match(/<meta\s+name="twitter:title"\s+content="([^"]+)">/i);
-                  if (twMatch) resultName = twMatch[1];
-              }
-              if (!resultName) {
-                   const jsonMatch = buffer.match(/"name":\s*"([^"]+)"/);
-                   if (jsonMatch && !jsonMatch[1].includes("Google")) {
-                       resultName = jsonMatch[1];
-                   }
-              }
-          }
-
-          // 解析訂閱數
-          // 策略：以 Handle ID 為錨點，向後搜尋 "subscribers" 關鍵字
-          if (resultSubs === 0) {
-              let anchorIndex = buffer.indexOf(handleAnchor, lastCheckIndex);
-              while (anchorIndex !== -1) {
-                  const snippet = buffer.slice(anchorIndex, anchorIndex + 2000);
-                  const textOnly = snippet.replace(/<[^>]+>/g, " "); // 移除 HTML 標籤干擾
-                  const subRegex = /([\d,.]+[KMB萬億]?)\s*(?:位?訂閱者|subscribers)/i;
-                  const m = textOnly.match(subRegex);
-                  if (m) {
-                      const val = this.parseSubsString(m[1]);
-                      // 過濾雜訊：忽略過小的數值 (如 < 500)，避免誤判
-                      if (val >= 500) {
-                          resultSubs = val;
-                          break;
-                      }
-                  }
-                  lastCheckIndex = anchorIndex + 1;
-                  anchorIndex = buffer.indexOf(handleAnchor, lastCheckIndex);
-              }
-          }
-
-          // 若資訊已齊全，或下載量超過安全閾值 (3MB)，則中斷連線
-          if ((resultName && resultSubs > 0) || buffer.length > 3 * 1024 * 1024) {
-              controller.abort(); 
-              break;
-          }
-      }
-
-      clearTimeout(timeoutTimer);
-
-      if (resultName) {
-          const decoded = decodeHtmlEntities(resultName);
-          if (decoded === "YouTube") return null; // 排除官方預設標題
-          
-          return { name: decoded, subs: resultSubs };
-      }
-      return null;
-
-    } catch (error) {
-       if (timeoutTimer) clearTimeout(timeoutTimer);
-       if (error.name !== 'AbortError') {
-           // 非主動中斷的錯誤，增加錯誤計數
-           this.errorCount++;
-           Logger.info(`抓取失敗 (${handle}):`, error.message);
-       }
-       return null;
-    }
+    });
   },
 
   // 處理 Rate Limit 限制

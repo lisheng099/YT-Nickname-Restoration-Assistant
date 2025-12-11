@@ -21,6 +21,16 @@
 
 ## 📝 修改紀錄 (Changelog)
 
+### v1.0.6 (2025-12-11)
+- [安全性] 權限請求：`https://studio.youtube.com/*`，因為娜主播後台也需要替換名稱功能。
+- [新增] background.js - 背景網路請求管理器
+- [優化] 將Fetcher.js中的單筆抓取邏輯移到background.js。
+- [優化] 調整manifest.json 新增background.js註冊
+
+### v1.0.5 (2025-12-11)
+- [修復] 臨時退版回1.0.3，避免需要重新請求權限。 
+
+
 ### v1.0.4 (2025-12-11)
 - [安全性] 權限最小化： 主動移除 `*://*.youtube.com/*` 權限，縮減為僅限 `https://www.youtube.com/*`。確保擴充功能無法存取網址 `https://studio.youtube.com/`(使用者的 YouTube Studio 後台數據)。
 - [優化] 修正說明頁面的版本號顯示邏輯

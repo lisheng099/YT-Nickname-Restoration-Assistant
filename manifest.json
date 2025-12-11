@@ -1,7 +1,7 @@
 {
    "manifest_version": 3,
    "name": "YT 暱稱還原助手",
-   "version": "1.0.4",
+   "version": "1.0.6",
    "description": "將 YouTube 聊天室與留言區的帳戶代稱(@ID)自動替換為暱稱(頻道顯示名稱)。採用本地背景爬蟲技術，不傳輸資料至第三方伺服器。",
    "action": {
       "default_title": "YT 暱稱還原助手",
@@ -19,15 +19,20 @@
    },
    "options_page": "manager.html",
    "host_permissions": [
-      "https://www.youtube.com/*"
+      "https://www.youtube.com/*",
+      "https://studio.youtube.com/*"
    ],
    "permissions": [
       "storage"
    ],
+   "background": {
+      "service_worker": "js/background.js"
+   },
    "content_scripts": [
       {
          "matches": [
-            "https://www.youtube.com/*"
+            "https://www.youtube.com/*",
+            "https://studio.youtube.com/*"
          ],
          "js": [
             "js/config.js",
