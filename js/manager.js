@@ -514,13 +514,6 @@ function deleteItem(targetId) {
   });
 }
 
-// XSS 防護：跳脫 HTML 特殊字元
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // 事件監聽區
 els.sortHeaders.forEach(th => {
   th.addEventListener("click", () => {

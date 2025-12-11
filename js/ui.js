@@ -85,7 +85,7 @@ const TooltipManager = {
     target.dataset.rnBound = "true";
   },
 
-  // 渲染文字節點
+  // 渲染文字節點 (一般情況)
   renderText: function(target, handle, displayName, subs, isExpired) {
     if (!target.isConnected) return; // 若元素已從 DOM 移除則停止操作
     
@@ -129,6 +129,78 @@ const TooltipManager = {
 
     target.dataset.rnReplaced = "yes";
     this.attachData(target, handle, displayName, subs, isExpired);
+  },
+
+  // 渲染投票欄位 (Poll) 的特殊包裹結構
+  // 用途：解決投票欄位 Metadata 無法直接替換文字的問題，需建立 Wrapper 調整版面
+  renderPollWrapper: function(el, handle, displayName, fullName, subs, isExpired) {
+      const parent = el.parentNode;
+
+      // 檢查：是否已經包裹過了？
+      // 如果 parent 有我們特定的 class，代表已經處理過結構
+      if (parent.classList.contains('rn-poll-wrapper')) {
+          // 只需要更新裡面的名字節點
+          const nameNode = parent.querySelector('.rn-poll-inserted-name');
+          if (nameNode) {
+              nameNode.textContent = displayName;
+              this.attachData(nameNode, handle, fullName, subs, isExpired);
+          }
+          // 標記 el 狀態
+          el.dataset.rnReplaced = "yes";
+          return;
+      }
+
+      // --- 尚未包裹，開始進行 DOM 結構重組 ---
+
+      // 1. 建立 Wrapper
+      const wrapper = document.createElement('div');
+      wrapper.className = 'rn-poll-wrapper';
+      // 樣式設定
+      Object.assign(wrapper.style, {
+          display: 'flex',
+          flexDirection: 'column', // 內部垂直排列
+          justifyContent: 'center',
+          alignItems: 'flex-start'
+      });
+      
+      // 2. 處理邊距 (Margin)
+      // 投票欄位通常文字與頭像有間距 (Margin-left)，我們要將這個間距移到 Wrapper 上
+      const computedStyle = window.getComputedStyle(el);
+      wrapper.style.marginLeft = computedStyle.marginLeft;
+      wrapper.style.marginRight = computedStyle.marginRight;
+      
+      // 清除原本元素的邊距，因為它現在在 Wrapper 內部
+      el.style.marginLeft = '0px';
+      el.style.marginRight = '0px';
+
+      // 3. 建立 Name Node (新名字)
+      const nameNode = document.createElement('div');
+      nameNode.className = 'rn-poll-inserted-name';
+      nameNode.textContent = displayName;
+      
+      // 複製字體樣式並微調
+      Object.assign(nameNode.style, {
+          color: computedStyle.color,
+          fontFamily: computedStyle.fontFamily,
+          fontSize: computedStyle.fontSize,
+          fontWeight: "bold",
+          lineHeight: "1.4",
+          marginBottom: "2px"
+      });
+
+      // 綁定 Tooltip
+      this.attachData(nameNode, handle, fullName, subs, isExpired);
+
+      // 4. 執行插入與搬移
+      // (A) 將 Wrapper 插在原本 el 的前面
+      parent.insertBefore(wrapper, el);
+      // (B) 將新名字放入 Wrapper
+      wrapper.appendChild(nameNode);
+      // (C) 將原本的 metadata 元素 (el) 移動到 Wrapper 內部 (這會自動從原父層移除)
+      wrapper.appendChild(el);
+
+      // 標記
+      el.dataset.rnReplaced = "yes";
   },
   
   // 綁定點擊複製事件

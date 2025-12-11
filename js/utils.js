@@ -38,3 +38,11 @@ function decodeHtmlEntities(str) {
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// === XSS 防護：跳脫 HTML 特殊字元 ===
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
