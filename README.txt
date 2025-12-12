@@ -3,12 +3,12 @@
 > 專案儲存庫 (GitHub Repository): > https://github.com/lisheng099/YT-Nickname-Restoration-Assistant
 
 ## 📖 專案簡介 (Introduction)
-這是一個注重隱私的瀏覽器擴充功能，旨在解決 YouTube 將使用者 ID 顯示為難以辨識的 Handle（如 `@user-xyz123`）的問題。本工具會自動將這些代碼「還原」為頻道原本的顯示名稱，讓留言區與聊天室的互動更加直觀。
+這是一個注重隱私的瀏覽器擴充功能，旨在解決 YouTube 將使用者 ID 顯示為難以辨識的 Handle（如 "@user-xyz123"）的問題。本工具會自動將這些代碼「還原」為頻道原本的顯示名稱，讓留言區與聊天室的互動更加直觀。
 
 ## 🛡️ 隱私承諾 (Privacy Policy)
 我們堅持 「本地運作、最小權限」 原則：
 1. 不傳輸資料： 所有查詢皆由您的瀏覽器直接向 YouTube 發起，不會經過任何第三方伺服器。
-2. 物理隔離： 權限僅限於 `https://www.youtube.com/*`，無法存取您的創作者後台 (Studio) 或其他敏感資訊。
+2. 物理隔離： 權限僅限於 "https://www.youtube.com/*"，"https://studio.youtube.com/*"。
 3. 開源透明： 程式碼完全公開，歡迎社群檢視。
 
 ## ✨ 主要功能 (Features)
@@ -23,13 +23,13 @@
 
 ### v1.0.6 (2025-12-12)
 - [優化] Background.js 調整資料分析邏輯，改善分析速度。
-- [優化] Fetcher.js 修正BURST_GAP參數、記憶體放機制、移除parseSubsString函式
+- [優化] Fetcher.js 修正delaySettings參數、記憶體放機制、移除parseSubsString函式
 - [優化] Popup.js 修改系統參數儲存機制
 - [優化] Main.js 新增抓取意見調查欄位
 - [優化] Manager.js 調整雜湊邏輯
 
 ### v1.0.6 (2025-12-11)
-- [安全性] 權限請求：`https://studio.youtube.com/*`，因為娜主播後台也需要替換名稱功能。
+- [安全性] 權限請求："https://studio.youtube.com/*"，因為娜主播說後台也需要替換名稱跟查看訂閱數功能。
 - [新增] Background.js - 背景網路請求管理器
 - [優化] 將Fetcher.js中的單筆抓取邏輯移到background.js。
 - [優化] 調整Manifest.json 新增background.js註冊
@@ -37,9 +37,8 @@
 ### v1.0.5 (2025-12-11)
 - [修復] 臨時退版回1.0.3，避免需要重新請求權限。 
 
-
 ### v1.0.4 (2025-12-11)
-- [安全性] 權限最小化： 主動移除 `*://*.youtube.com/*` 權限，縮減為僅限 `https://www.youtube.com/*`。確保擴充功能無法存取網址 `https://studio.youtube.com/`(使用者的 YouTube Studio 後台數據)。
+- [安全性] 權限最小化： 主動移除 "*://*.youtube.com/*" 權限，縮減為僅限 "https://www.youtube.com/*"。確保擴充功能無法存取網址 "https://studio.youtube.com/"(使用者的 YouTube Studio 後台數據)。
 - [優化] 修正說明頁面的版本號顯示邏輯
 - [優化] 調整抓取資料佇列順序規則
 - [優化] 新增抓取資料的初始輪詢模式，讓新開頁面可以快速抓取一定數量的資料
