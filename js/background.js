@@ -31,12 +31,11 @@ async function fetchChannelInfo(handle) {
       headers: {
         "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache",
-        // [建議新增] 偽裝 User-Agent 降低被擋機率
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
 
-    // [新增] 檢查是否被導向登入頁面 (Soft Ban 檢測)
+    // 檢查是否被導向登入頁面 (Soft Ban 檢測)
     if (response.url.includes("google.com/accounts") || response.url.includes("consent.youtube.com")) {
         clearTimeout(timeoutId);
         return { error: "Redirected to login/consent", status: 429 };
@@ -56,29 +55,34 @@ async function fetchChannelInfo(handle) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     
-    let buffer = "";
+    let tailBuffer = "";
+    const OVERLAP_SIZE = 1000;
     let resultName = null;
     let resultSubs = null;
-    let lastCheckIndex = 0; 
+    let totalLength = 0; // 用來計算總流量
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      totalLength += chunk.length;
+      
+      // 搜尋範圍 = 上一次的尾巴 + 新的 chunk
+      const searchScope = tailBuffer + chunk;
 
       // === 解析名稱 ===
       if (!resultName) {
-        const ogMatch = buffer.match(/<meta\s+property="og:title"\s+content="([^"]+)">/i);
+        const ogMatch = searchScope.match(/<meta\s+(?:property="og:title"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:title")>/i);
         if (ogMatch) {
-          resultName = ogMatch[1].replace(/\s*-\s*YouTube$/, "").trim();
+            resultName = (ogMatch[1] || ogMatch[2]).replace(/\s*-\s*YouTube$/, "").trim();
         }
         if (!resultName) {
-           const twMatch = buffer.match(/<meta\s+name="twitter:title"\s+content="([^"]+)">/i);
+           const twMatch = searchScope.match(/<meta\s+name="twitter:title"\s+content="([^"]+)">/i);
            if (twMatch) resultName = twMatch[1];
         }
         if (!resultName) {
-           const jsonMatch = buffer.match(/"name":\s*"([^"]+)"/);
+           const jsonMatch = searchScope.match(/"name":\s*"([^"]+)"/);
            if (jsonMatch && !jsonMatch[1].includes("Google")) {
                resultName = jsonMatch[1];
            }
@@ -87,10 +91,12 @@ async function fetchChannelInfo(handle) {
 
       // === 解析訂閱數 ===
       if (!resultSubs) {
-        let anchorIndex = buffer.indexOf(handleAnchor, lastCheckIndex);
+        // 每次都在目前的視窗範圍內從頭找，因為 searchScope 不會無限長大
+        let lastCheckIndex = 0; 
+        let anchorIndex = searchScope.indexOf(handleAnchor, lastCheckIndex);
         
         while (anchorIndex !== -1) {
-          const snippet = buffer.slice(anchorIndex, anchorIndex + 2000); 
+          const snippet = searchScope.slice(anchorIndex, anchorIndex + 2000); 
           const textOnly = snippet.replace(/<[^>]+>/g, " ");
 
           const subRegex = /([\d,.]+[KMB萬億]?)\s*(?:位?訂閱者|subscribers)/i;
@@ -98,6 +104,7 @@ async function fetchChannelInfo(handle) {
           
           if (m) {
             const rawString = m[1];
+            // 注意: 這裡需要確保 parseSubsString 函式在 background.js 中可被呼叫 
             const numericVal = parseSubsString(rawString);
 
             if (numericVal >= 500) {
@@ -106,11 +113,19 @@ async function fetchChannelInfo(handle) {
             }
           }
           lastCheckIndex = anchorIndex + 1;
-          anchorIndex = buffer.indexOf(handleAnchor, lastCheckIndex);
+          anchorIndex = searchScope.indexOf(handleAnchor, lastCheckIndex);
         }
       }
 
-      if ((resultName && resultSubs) || buffer.length > 3 * 1024 * 1024) {
+      // 更新 tailBuffer (保留最後一段，供下一次拼接)
+      if (searchScope.length > OVERLAP_SIZE) {
+          tailBuffer = searchScope.slice(-OVERLAP_SIZE);
+      } else {
+          tailBuffer = searchScope;
+      }
+
+      // 檢查 totalLength
+      if ((resultName && resultSubs) || totalLength > 3 * 1024 * 1024) {
         reader.cancel(); 
         break;
       }
@@ -119,7 +134,8 @@ async function fetchChannelInfo(handle) {
     clearTimeout(timeoutId);
 
     if (resultName) {
-      return { success: true, nameRaw: resultName, subsRaw: resultSubs };
+      const numericSubs = resultSubs ? parseSubsString(resultSubs) : 0;
+      return { success: true, nameRaw: resultName, subs: numericSubs };
     } else {
       return { error: "Name not found" };
     }

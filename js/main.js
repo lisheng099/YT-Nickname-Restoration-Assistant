@@ -41,7 +41,10 @@ class PageScanner {
         "yt-live-chat-banner-poll-renderer #metadata-text",
         
         // 投票欄位 下方
-        "yt-live-chat-poll-header-renderer .metadata"
+        "yt-live-chat-poll-header-renderer .metadata",
+
+        // 意見調查
+        "yt-live-chat-call-for-questions-renderer #author-name",
     ].join(",");
     
     this.init();

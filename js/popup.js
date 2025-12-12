@@ -56,12 +56,23 @@ saveSettingsBtn.addEventListener("click", () => {
   }
 
   // 寫入 Storage
-  chrome.storage.local.set({ 
-      [SETTINGS_KEY]: { maxLength: val },
-      [CLICK_TO_COPY_KEY]: isClickToCopy,
-      [FETCH_SPEED_KEY]: speedMode
-  }, () => {
-      // 按鈕狀態回饋 (UX 優化)
+  // 讀取目前的設定
+  chrome.storage.local.get(SETTINGS_KEY, (res) => {
+    const currentSettings = res[SETTINGS_KEY] || {};
+
+    // 合併設定 
+    const newSettings = {
+        ...currentSettings,
+        maxLength: val
+    };
+
+    // 寫回完整的設定物件
+    chrome.storage.local.set({ 
+        [SETTINGS_KEY]: newSettings,
+        [CLICK_TO_COPY_KEY]: isClickToCopy,
+        [FETCH_SPEED_KEY]: speedMode
+    }, () => {
+      // 按鈕狀態回饋 
       const originalText = saveSettingsBtn.textContent;
       saveSettingsBtn.textContent = "已儲存！";
       saveSettingsBtn.style.background = "#2e7d32";
@@ -70,6 +81,7 @@ saveSettingsBtn.addEventListener("click", () => {
         saveSettingsBtn.textContent = originalText;
         saveSettingsBtn.style.background = "";
       }, 1500);
+    });
   });
 });
 

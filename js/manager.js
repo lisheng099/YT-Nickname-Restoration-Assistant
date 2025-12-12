@@ -274,7 +274,12 @@ function updateBatchState() {
 
 // 計算資料雜湊 (SHA-256)
 async function computeChecksum(data) {
-    const msgUint8 = new TextEncoder().encode(JSON.stringify(data));
+    const orderedData = {};
+    Object.keys(data).sort().forEach(key => {
+        orderedData[key] = data[key];
+    });
+    
+    const msgUint8 = new TextEncoder().encode(JSON.stringify(orderedData));
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
