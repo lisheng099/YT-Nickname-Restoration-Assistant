@@ -22,7 +22,6 @@
 ## 📝 修改紀錄 (Changelog)
 
 ### v1.0.6 (2025-12-12)
-- [安全性] 權限請求：`https://studio.youtube.com/*`，因為娜主播後台也需要替換名稱功能。
 - [優化] Background.js 調整資料分析邏輯，改善分析速度。
 - [優化] Fetcher.js 修正BURST_GAP參數、記憶體放機制、移除parseSubsString函式
 - [優化] Popup.js 修改系統參數儲存機制
@@ -31,9 +30,9 @@
 
 ### v1.0.6 (2025-12-11)
 - [安全性] 權限請求：`https://studio.youtube.com/*`，因為娜主播後台也需要替換名稱功能。
-- [新增] background.js - 背景網路請求管理器
+- [新增] Background.js - 背景網路請求管理器
 - [優化] 將Fetcher.js中的單筆抓取邏輯移到background.js。
-- [優化] 調整manifest.json 新增background.js註冊
+- [優化] 調整Manifest.json 新增background.js註冊
 
 ### v1.0.5 (2025-12-11)
 - [修復] 臨時退版回1.0.3，避免需要重新請求權限。 
