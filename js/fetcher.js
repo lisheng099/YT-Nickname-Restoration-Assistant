@@ -112,7 +112,7 @@ const NameFetcher = {
 
                   if (this.initialPollQuota > 0 && this.errorCount === 0) {
                       isBurst = true;
-                      currentRequiredGap = this.BURST_GAP; // 啟用極速間隔 (0.3s)
+                      currentRequiredGap = this.INITIAL_POLL_DELAY.MAX; // 啟用極速間隔 (0.3s)
                   }
 
                   // 加入隨機波動 (Jitter)
@@ -151,7 +151,6 @@ const NameFetcher = {
 
       try {
           const result = await this.performFetch(handle);
-          
           if (result) {
               // 請求成功：重置錯誤計數
               if (this.errorCount > 0) {
@@ -163,11 +162,15 @@ const NameFetcher = {
               if (callback) callback(handle, result);
           } else {
               // 請求失敗 (如 404)：移除處理狀態
-              this.activeRequests.delete(handle);
               if (callback) callback(handle, null);
           }
       } catch (err) {
           Logger.red("任務執行異常:", err);
+          // 發生錯誤時，仍需通知 callback 以釋放記憶體
+          if (callback) callback(handle, null);
+      } finally {
+          // 確保無論成功、失敗或報錯，都清除鎖定狀態
+          this.activeRequests.delete(handle);
       }
 
       // 任務完成後的本地冷卻
@@ -236,10 +239,7 @@ const NameFetcher = {
           }
           if (finalName === "YouTube") { resolve(null); return; }
 
-          let finalSubs = 0;
-          if (response.subsRaw) {
-              finalSubs = this.parseSubsString(response.subsRaw);
-          }
+          const finalSubs = response.subs || 0;
 
           resolve({ name: finalName, subs: finalSubs });
       });
@@ -264,19 +264,5 @@ const NameFetcher = {
       }
   },
 
-  // 輔助函式：將訂閱數縮寫 (如 1.2M) 轉換為數值
-  parseSubsString: function(str) {
-      if (!str) return 0;
-      let val = parseFloat(str.replace(/[^0-9.]/g, ''));
-      if (isNaN(val)) return 0;
-      
-      const upper = str.toUpperCase();
-      if (upper.includes('K')) val *= 1000;
-      else if (upper.includes('M')) val *= 1000000;
-      else if (upper.includes('B')) val *= 1000000000;
-      else if (upper.includes('萬')) val *= 10000;
-      else if (upper.includes('億')) val *= 100000000;
-      
-      return Math.floor(val);
-  }
+
 };
