@@ -45,6 +45,9 @@ class PageScanner {
 
         // 意見調查
         "yt-live-chat-call-for-questions-renderer #author-name",
+
+        // 降落訊息
+        "yt-live-chat-banner-redirect-renderer #banner-text span",
     ].join(",");
     
     this.init();
@@ -267,6 +270,10 @@ class PageScanner {
 
           this.queueForUpdate(el.dataset.rnHandle, el);
       } else {
+          //忽略降落訊息切割後不需要的字段
+          if (el.closest("yt-live-chat-banner-redirect-renderer")) {
+              return; 
+          }
           // 情況 C: 這可能是一般名稱，先掛上 tooltip 監聽器 (Click-to-Copy)
           TooltipManager.attachData(el, null, rawText);
       }

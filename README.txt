@@ -21,6 +21,9 @@
 
 ## 📝 修改紀錄 (Changelog)
 
+### v1.0.7 (2025-12-16)
+- [優化] 處理降落訊息
+
 ### v1.0.6 (2025-12-12)
 - [優化] Background.js 調整資料分析邏輯，改善分析速度。
 - [優化] Fetcher.js 修正delaySettings參數、記憶體放機制、移除parseSubsString函式
