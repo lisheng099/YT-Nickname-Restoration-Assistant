@@ -3,7 +3,9 @@
 // 用途：集中管理應用程式的所有參數設定，方便後續維護與調整。
 // ===========================================================
 
-window.AppConfig = {
+const globalScope = (typeof window !== "undefined") ? window : self;
+
+globalScope.AppConfig = {
   // 快取儲存鍵值 (Storage Key)
   // 注意：此為存取瀏覽器本地資料庫的唯一識別碼，若修改將導致無法讀取舊使用者的歷史資料。
   CACHE_KEY: "yt_realname_store",

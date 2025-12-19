@@ -24,12 +24,26 @@ class PageScanner {
         // 新版留言結構 (View Model)
         "ytd-comment-view-model #author-text span",
         "ytd-comment-view-model h3 > a",
+        "ytd-author-comment-badge-renderer #text",
+
+        // --- 2. 橫幅 (Live Chat) ---
+
+        // Super Chat (SC) 橫幅
+        "yt-live-chat-ticker-paid-message-item-renderer #text",
+
+        // 新會員加入
+        "yt-live-chat-ticker-sponsor-item-renderer #text",
+
+        // 置頂訊息
+        "yt-live-chat-pinned-message-renderer #author-name",
 
         // --- 2. 聊天室 (Live Chat) ---
         // 一般訊息
         "yt-live-chat-text-message-renderer #author-name",
         // Super Chat (SC)
         "yt-live-chat-paid-message-renderer #author-name",
+        // 貼圖SC
+        "yt-live-chat-author-chip #author-name",
         // 會員加入訊息
         "yt-live-chat-membership-item-renderer #author-name",
         // 贈送會員通知 (送禮者)
@@ -281,16 +295,22 @@ class PageScanner {
 
 
   isHandle(text) {
-      // 簡單判斷：以 @ 開頭且長度大於 1
-      return text.startsWith("@") && text.length >= 2;
+      return /^@[^\s]+$/.test(text);
   }
 
-  queueForUpdate(handle, element) {
+    async queueForUpdate(handle, element) {
+      if (handle.includes('\n')) {
+          handle = handle.split('\n')[0].trim();
+      }
       // 標記此元素目前「鎖定」哪個 Handle
       element.dataset.rnTargetHandle = handle;
       
-      const cache = NameCache.get(handle);
-      
+      // 使用 await 向背景查詢快取
+      const cache = await NameCache.get(handle);
+      Logger.info(`[Main] Cache lookup for ${handle} : ${cache ? cache.name : "null"}`);
+      // 在等待期間，如果元素已經被回收或目標改變，則放棄更新
+      if (element.dataset.rnTargetHandle !== handle) return;
+
       if (cache) {
           this.applyUpdate(element, handle, cache);
           // 如果快取過期，背景靜默更新

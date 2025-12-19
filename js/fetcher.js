@@ -147,6 +147,7 @@ const NameFetcher = {
 
       // 取得任務執行
       const task = high.length > 0 ? high.shift() : low.shift();
+      Logger.info(`[Fetcher] 處理任務: ${task.handle}`);
       const { handle, callback } = task;
 
       try {

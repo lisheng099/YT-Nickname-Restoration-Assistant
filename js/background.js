@@ -1,7 +1,13 @@
 // ===========================================================
-// background.js - 背景網路請求管理器
-// 用途：從背景呼叫爬蟲取得資料，處理跨網域請求與串流解析。
+// background.js - 背景服務入口
 // ===========================================================
+
+// 引入設定檔與快取管理器
+try {
+    importScripts('config.js', 'bg_cache.js');
+} catch (e) {
+    console.error(e);
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "FETCH_CHANNEL_INFO") {
@@ -11,27 +17,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function fetchChannelInfo(handle) {
+
+  // 即使前端因為競態條件誤判沒資料而發送了請求，後端在這裡做最後確認。
+  // 如果快取中有有效的資料，直接回傳，防止多餘的爬蟲請求。
+  const cachedData = BgCache.get(handle);
+  if (handle === null || handle === undefined) {
+      return { success: true, nameRaw: handle, subs:0 };
+  }
+
   let controller = null;
   let timeoutId = null;
 
   try {
     const cleanHandle = handle.replace(/^@/, '');
-    const handleAnchor = handle.startsWith("@") ? handle : "@" + handle;
     const targetUrl = `https://www.youtube.com/@${encodeURIComponent(cleanHandle)}`;
 
-    // 1. 設定逾時控制 (25秒)
+    // 設定逾時控制 (25秒)
     controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), 25000);
 
-    // 2. 發起請求
+    // 發起請求
     const response = await fetch(targetUrl, {
       method: "GET",
       signal: controller.signal,
       credentials: "include", 
       headers: {
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
         "Cache-Control": "no-cache",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36"
       }
     });
 
@@ -46,95 +59,54 @@ async function fetchChannelInfo(handle) {
       return { error: "Too Many Requests", status: 429 };
     }
 
-    if (!response.ok) {
-      clearTimeout(timeoutId);
-      return { error: "Network response was not ok", status: response.status };
-    }
 
-    // 3. 串流讀取 (Stream Parsing)
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    
-    let tailBuffer = "";
-    const OVERLAP_SIZE = 1000;
     let resultName = null;
     let resultSubs = null;
-    let totalLength = 0; // 用來計算總流量
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const text = await response.text();
+    console.log("text length:", text.length); 
+    const jsonMatch = text.match(/ytInitialData\s*=\s*({.+?});/);
 
-      const chunk = decoder.decode(value, { stream: true });
-      totalLength += chunk.length;
-      
-      // 搜尋範圍 = 上一次的尾巴 + 新的 chunk
-      const searchScope = tailBuffer + chunk;
-
-      // === 解析名稱 ===
-      if (!resultName) {
-        const ogMatch = searchScope.match(/<meta\s+(?:property="og:title"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:title")>/i);
-        if (ogMatch) {
-            resultName = (ogMatch[1] || ogMatch[2]).replace(/\s*-\s*YouTube$/, "").trim();
-        }
-        if (!resultName) {
-           const twMatch = searchScope.match(/<meta\s+name="twitter:title"\s+content="([^"]+)">/i);
-           if (twMatch) resultName = twMatch[1];
-        }
-        if (!resultName) {
-           const jsonMatch = searchScope.match(/"name":\s*"([^"]+)"/);
-           if (jsonMatch && !jsonMatch[1].includes("Google")) {
-               resultName = jsonMatch[1];
-           }
-        }
-      }
-
-      // === 解析訂閱數 ===
-      if (!resultSubs) {
-        // 每次都在目前的視窗範圍內從頭找，因為 searchScope 不會無限長大
-        let lastCheckIndex = 0; 
-        let anchorIndex = searchScope.indexOf(handleAnchor, lastCheckIndex);
-        
-        while (anchorIndex !== -1) {
-          const snippet = searchScope.slice(anchorIndex, anchorIndex + 2000); 
-          const textOnly = snippet.replace(/<[^>]+>/g, " ");
-
-          const subRegex = /([\d,.]+[KMB萬億]?)\s*(?:位?訂閱者|subscribers)/i;
-          const m = textOnly.match(subRegex);
-          
-          if (m) {
-            const rawString = m[1];
-            // 注意: 這裡需要確保 parseSubsString 函式在 background.js 中可被呼叫 
-            const numericVal = parseSubsString(rawString);
-
-            if (numericVal >= 500) {
-                resultSubs = rawString; 
-                break; 
-            }
-          }
-          lastCheckIndex = anchorIndex + 1;
-          anchorIndex = searchScope.indexOf(handleAnchor, lastCheckIndex);
-        }
-      }
-
-      // 更新 tailBuffer (保留最後一段，供下一次拼接)
-      if (searchScope.length > OVERLAP_SIZE) {
-          tailBuffer = searchScope.slice(-OVERLAP_SIZE);
-      } else {
-          tailBuffer = searchScope;
-      }
-
-      // 檢查 totalLength
-      if ((resultName && resultSubs) || totalLength > 3 * 1024 * 1024) {
-        reader.cancel(); 
-        break;
-      }
+    if (!jsonMatch) {
+         return { error: "Parse error: ytInitialData not found" };
     }
 
+    let jsonData= JSON.parse(jsonMatch[1]);
+
+    let name = null;
+    let subs = null;
+
+    const pageHeader = jsonData.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+    if (pageHeader) {
+      
+      // 抓名稱
+      name = pageHeader.title?.dynamicTextViewModel?.text?.content;
+
+      // 抓訂閱數 
+      const rows = pageHeader.metadata?.contentMetadataViewModel?.metadataRows;
+      if (rows && rows.length > 1) {
+        // 根據 JSON，訂閱數在第二個 row (index 1) 的第一個 part
+        const parts = rows[1].metadataParts;
+        if (parts && parts.length > 0) {
+          subs = parts[0].text?.content;
+        }
+      } else if (rows && rows.length > 0) {
+        // 備用：有時候只有一行，嘗試在第一行找找看
+        const parts = rows[0].metadataParts;
+        if (parts) {
+          // 遍歷所有 part 找看起來像訂閱數的
+          const subPart = parts.find(p => p.text?.content && (p.text.content.includes("訂閱") || p.text.content.includes("subscribers")));
+          if (subPart) subs = subPart.text.content;
+        }
+      }
+    }
+    resultName = name;
+    resultSubs = subs;
     clearTimeout(timeoutId);
 
     if (resultName) {
-      const numericSubs = resultSubs ? parseSubsString(resultSubs) : 0;
+      let numericSubs = resultSubs ? parseSubsString(resultSubs) : 0;
+      if (numericSubs<500) numericSubs=0; //過濾500以下訂閱數
       return { success: true, nameRaw: resultName, subs: numericSubs };
     } else {
       return { error: "Name not found" };
@@ -149,7 +121,7 @@ async function fetchChannelInfo(handle) {
   }
 }
 
-// 輔助函式：將訂閱數縮寫 (如 1.2M) 轉換為數值
+// 輔助函式
 function parseSubsString(str) {
     if (!str) return 0;
     let val = parseFloat(str.replace(/[^0-9.]/g, ''));

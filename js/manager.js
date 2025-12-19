@@ -4,7 +4,10 @@
 // 架構：採用 Client-Side Rendering，將 Storage 資料全數載入記憶體後進行操作。
 // ===========================================================
 
-const { CACHE_KEY, TTL } = window.AppConfig;
+const { CACHE_KEY, TTL } = window.AppConfig; 
+
+const LOCK_NAME = "yt_realname_storage_lock";
+
 const els = {
   stats: document.getElementById("statsText"),
   listBody: document.getElementById("listBody"),
@@ -421,17 +424,22 @@ function finalizeImport(isTrusted) {
     validCount++;
   }
 
-  // 寫入 Storage
-  chrome.storage.local.get(CACHE_KEY, (res) => {
-    const currentData = res[CACHE_KEY] || {};
-    const mergedData = { ...currentData, ...cleanData };
+  // 使用 Web Locks 防止寫入 Storage衝突
+  navigator.locks.request(LOCK_NAME, () => {
+      return new Promise((resolve) => {
+          chrome.storage.local.get(CACHE_KEY, (res) => {
+            const currentData = res[CACHE_KEY] || {};
+            const mergedData = { ...currentData, ...cleanData };
 
-    chrome.storage.local.set({ [CACHE_KEY]: mergedData }, () => {
-      alert(`成功匯入 ${validCount} 筆資料！`);
-      els.importFile.value = ""; 
-      pendingImportData = null; // 清除暫存
-      loadData(); 
-    });
+            chrome.storage.local.set({ [CACHE_KEY]: mergedData }, () => {
+              alert(`成功匯入 ${validCount} 筆資料！`);
+              els.importFile.value = ""; 
+              pendingImportData = null; // 清除暫存
+              // loadData() 會由 storage.onChanged 觸發，這裡不需要手動呼叫
+              resolve(); 
+            });
+          });
+      });
   });
 }
 
@@ -444,12 +452,18 @@ function cancelImport() {
 
 // 單筆過期操作
 function expireItem(targetId) {
-  chrome.storage.local.get(CACHE_KEY, (res) => {
-    const raw = res[CACHE_KEY] || {};
-    if (raw[targetId]) {
-      raw[targetId].ts = Date.now() - TTL - 10000;
-      chrome.storage.local.set({ [CACHE_KEY]: raw });
-    }
+  navigator.locks.request(LOCK_NAME, () => {
+      return new Promise((resolve) => {
+          chrome.storage.local.get(CACHE_KEY, (res) => {
+            const raw = res[CACHE_KEY] || {};
+            if (raw[targetId]) {
+              raw[targetId].ts = Date.now() - TTL - 10000;
+              chrome.storage.local.set({ [CACHE_KEY]: raw }, resolve);
+            } else {
+              resolve();
+            }
+          });
+      });
   });
 }
 
@@ -459,19 +473,27 @@ function batchExpire() {
   if (checkedBoxes.length === 0) return;
   const idsToExpire = Array.from(checkedBoxes).map(cb => cb.value);
 
-  chrome.storage.local.get(CACHE_KEY, (res) => {
-    const raw = res[CACHE_KEY] || {};
-    let changed = false;
-    const pastTime = Date.now() - TTL - 10000;
-    
-    idsToExpire.forEach(id => {
-      if (raw[id]) {
-        raw[id].ts = pastTime;
-        changed = true;
-      }
-    });
+  navigator.locks.request(LOCK_NAME, () => {
+      return new Promise((resolve) => {
+          chrome.storage.local.get(CACHE_KEY, (res) => {
+            const raw = res[CACHE_KEY] || {};
+            let changed = false;
+            const pastTime = Date.now() - TTL - 10000;
+            
+            idsToExpire.forEach(id => {
+              if (raw[id]) {
+                raw[id].ts = pastTime;
+                changed = true;
+              }
+            });
 
-    if (changed) chrome.storage.local.set({ [CACHE_KEY]: raw });
+            if (changed) {
+                chrome.storage.local.set({ [CACHE_KEY]: raw }, resolve);
+            } else {
+                resolve();
+            }
+          });
+      });
   });
 }
 
@@ -483,16 +505,24 @@ function batchDelete() {
 
   const idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
 
-  chrome.storage.local.get(CACHE_KEY, (res) => {
-    const raw = res[CACHE_KEY] || {};
-    let changed = false;
-    idsToDelete.forEach(id => {
-      if (raw[id]) {
-        delete raw[id];
-        changed = true;
-      }
-    });
-    if (changed) chrome.storage.local.set({ [CACHE_KEY]: raw });
+  navigator.locks.request(LOCK_NAME, () => {
+      return new Promise((resolve) => {
+          chrome.storage.local.get(CACHE_KEY, (res) => {
+            const raw = res[CACHE_KEY] || {};
+            let changed = false;
+            idsToDelete.forEach(id => {
+              if (raw[id]) {
+                delete raw[id];
+                changed = true;
+              }
+            });
+            if (changed) {
+                chrome.storage.local.set({ [CACHE_KEY]: raw }, resolve);
+            } else {
+                resolve();
+            }
+          });
+      });
   });
 }
 
@@ -510,12 +540,18 @@ function updatePaginationUI(totalPages, totalItems) {
 
 // 單筆刪除
 function deleteItem(targetId) {
-  chrome.storage.local.get(CACHE_KEY, (res) => {
-    const raw = res[CACHE_KEY] || {};
-    if (raw[targetId]) {
-      delete raw[targetId];
-      chrome.storage.local.set({ [CACHE_KEY]: raw });
-    }
+  navigator.locks.request(LOCK_NAME, () => {
+      return new Promise((resolve) => {
+          chrome.storage.local.get(CACHE_KEY, (res) => {
+            const raw = res[CACHE_KEY] || {};
+            if (raw[targetId]) {
+              delete raw[targetId];
+              chrome.storage.local.set({ [CACHE_KEY]: raw }, resolve);
+            } else {
+              resolve();
+            }
+          });
+      });
   });
 }
 
@@ -579,7 +615,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 els.clearBtn.addEventListener("click", () => {
   if (confirm("確定要清空所有資料嗎？")) {
-    chrome.storage.local.remove(CACHE_KEY); 
+      // 清空也需要鎖定，防止清空過程中背景寫入舊資料
+      navigator.locks.request(LOCK_NAME, () => {
+          return new Promise((resolve) => {
+              chrome.storage.local.remove(CACHE_KEY, resolve);
+          });
+      });
   }
 });
 
