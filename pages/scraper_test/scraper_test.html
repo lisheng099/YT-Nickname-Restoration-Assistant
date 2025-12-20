@@ -1,0 +1,37 @@
+<div class="container">
+  <h1>🕷️ 爬蟲診斷與強制更新</h1>
+  
+  <p style="color:#666; font-size:14px;">
+    輸入 Handle ID (例如 @pewdiepie)，系統將<b>忽略本地快取</b>，強制向 YouTube 重新抓取最新資料。
+  </p>
+
+  <div class="input-group">
+    <input type="text" id="handleInput" placeholder="@User-ID..." value="@">
+    <button id="testBtn">強制抓取 (更新快取)</button>
+  </div>
+
+  <div class="result-box">
+    <div class="row">
+      <div class="label">狀態:</div>
+      <div class="value" id="resStatus">待機中</div>
+    </div>
+    <div class="row">
+      <div class="label">顯示名稱:</div>
+      <div class="value" id="resName">-</div>
+    </div>
+    <div class="row">
+      <div class="label">訂閱數:</div>
+      <div class="value" id="resSubs">-</div>
+    </div>
+    <div class="row" style="border:none;">
+      <div class="label">原始回應:</div>
+      <div class="value" id="resRaw"></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>💡 注意事項：</strong><br>
+    1. 此操作會直接<b>覆寫</b>您電腦中該頻道的快取資料。<br>
+    2. 若某個頻道的名稱一直顯示舊資料，可在此手動強制更新。
+  </div>
+</div>

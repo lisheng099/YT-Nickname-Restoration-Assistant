@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <title>YT 暱稱還原助手</title>
+  <style>
+    body {
+      margin: 0; padding: 16px;
+      font-family: "Segoe UI", sans-serif;
+      font-size: 13px; min-width: 250px; color: #333;
+    }
+    h1 { font-size: 16px; margin: 0 0 8px; color: #0f0f0f; }
+    .badge {
+      background: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 12px; font-size: 10px;
+    }
+    .status-card {
+      background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 12px;
+      text-align: center; border: 1px solid #eee;
+    }
+    .status-num { font-size: 18px; font-weight: bold; color: #2e7d32; display: block; margin-bottom: 4px; }
+    .status-desc { color: #666; font-size: 11px; }
+    .btn {
+      width: 100%; padding: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 4px; 
+      color: #333; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+    }
+    .btn:hover { background: #f0f0f0; border-color: #999; }
+    
+    .settings-row {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    }
+    .settings-input {
+      width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center;
+    }
+    .settings-select {
+        padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;
+    }
+    input[type="checkbox"] {
+      cursor: pointer; width: 16px; height: 16px;
+    }
+    
+    .btn-save {
+      background: #4caf50; color: white; border: none; padding: 6px; font-size: 12px;
+    }
+    .btn-save:hover { background: #43a047; }
+
+    .footer-link {
+      cursor: pointer;
+      color: #999;
+      font-size: 11px;
+      text-decoration: none;
+      font-family: monospace;
+      transition: color 0.2s;
+    }
+    .footer-link:hover {
+      color: #666;
+      text-decoration: underline;
+    }
+    
+    .footer-container {
+      margin-top: 12px; 
+      text-align: center; 
+      border-top: 1px solid #eee; 
+      padding-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>YT 暱稱還原助手 <span class="badge" id="appVersion"></span></h1>
+  
+  <div class="status-card">
+    <span id="countText" class="status-num">...</span>
+    <span class="status-desc">已快取的暱稱</span>
+  </div>
+
+  <div class="status-card" style="text-align: left; padding-bottom: 8px;">
+    <div style="font-weight: bold; margin-bottom: 8px; font-size: 12px;">偏好設定</div>
+    
+    <div class="settings-row">
+      <span>名稱最大長度:</span>
+      <input type="number" id="maxLengthInput" class="settings-input" min="5" max="50">
+    </div>
+
+    <div class="settings-row">
+      <span title="開啟後，點擊還原後的名稱可直接複製頻道網址">點擊名稱複製網址:</span>
+      <input type="checkbox" id="clickToCopyInput">
+    </div>
+
+    <div class="settings-row">
+      <span title="減慢抓取速度可降低被 YouTube 限制的風險">抓取頻率:</span>
+      <select id="fetchSpeedSelect" class="settings-select">
+          <option value="NORMAL">普通 (預設)</option>
+          <option value="SLOW">慢速 (安全模式)</option>
+      </select>
+    </div>
+
+    <button id="saveSettingsBtn" class="btn btn-save">儲存設定 (需重新整理)</button>
+  </div>
+
+  <button id="openManagerBtn" class="btn">
+    📋 開啟快取管理頁面
+  </button>
+  
+  <button id="openManualBtn" class="btn" style="margin-top: 8px; border-color: #bbdefb; color: #1565c0; background: #e3f2fd;">
+    📖 使用說明書
+  </button>
+
+  <div class="footer-container">
+    <span id="openReadmeBtn" class="footer-link">
+      📜 關於 & 修改紀錄
+    </span>
+  </div>
+
+  <script src="../../js/shared/config.js"></script>  
+  <script src="popup.js"></script>
+</body>
+</html>

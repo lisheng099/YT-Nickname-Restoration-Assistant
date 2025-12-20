@@ -26,10 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const startTime = Date.now();
   
       // 發送訊息給 Background.js
-      chrome.runtime.sendMessage({ type: "FETCH_CHANNEL_INFO", handle: handle }, (response) => {
+      chrome.runtime.sendMessage({ 
+          type: "FETCH_CHANNEL_INFO", 
+          handle: handle,
+          refresh: true
+      }, (response) => {
         const duration = Date.now() - startTime;
         btn.disabled = false;
-        btn.textContent = "開始抓取";
+        btn.textContent = "強制抓取 (更新快取)";
   
         console.log("[Test Result]", response);
         els.raw.textContent = JSON.stringify(response, null, 2);

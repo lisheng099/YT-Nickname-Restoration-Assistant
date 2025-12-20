@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <title>YT 暱稱還原助手 - 快取管理頁面</title>
+  <style>
+    body {
+      margin: 0; padding: 20px;
+      font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+      font-size: 14px; color: #333; background-color: #f5f5f5;
+      max-width: 800px; margin: 0 auto;
+    }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; background: #fff; padding: 15px 20px;
+      border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    h1 { margin: 0; font-size: 20px; color: #0f0f0f; }
+    .stats { color: #666; font-size: 13px; }
+    .card {
+      background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      overflow: hidden;
+      display: flex; flex-direction: column; min-height: 400px; position: relative;
+    }
+    .toolbar {
+      padding: 10px 15px; border-bottom: 1px solid #eee;
+      display: flex; justify-content: space-between; align-items: center;
+      background: #fafafa;
+    }
+    .toolbar-actions {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .search-box {
+      padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; 
+      width: 220px; font-size: 13px; outline: none;
+    }
+    .search-box:focus { border-color: #1565c0; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    
+    th { 
+      background: #fff; font-weight: 600; color: #555; font-size: 12px; 
+      border-bottom: 2px solid #eee; user-select: none;
+    }
+    th.sortable { cursor: pointer; transition: background 0.2s; }
+    th.sortable:hover { background: #f0f0f0; color: #000; }
+    th.sortable::after { content: ' ↕'; opacity: 0.3; font-size: 10px; margin-left: 4px; }
+    th.sort-asc::after { content: ' ▲'; opacity: 1; color: #1565c0; }
+    th.sort-desc::after { content: ' ▼'; opacity: 1; color: #1565c0; }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover { background: #f9f9f9; }
+    
+    /* 欄位樣式 */
+    .col-check { width: 40px; text-align: center; }
+    .col-id { width: 25%; color: #666; font-family: monospace; }
+    .col-name { width: 35%; font-weight: bold; color: #000; }
+    .col-subs { width: 15%; color: #2e7d32; font-weight: 600; }
+    .col-time { width: 15%; color: #888; font-size: 12px; }
+    .col-action { width: 15%; text-align: right; white-space: nowrap;} 
+
+    /* 高亮與標籤樣式 */
+    .highlight { background-color: #fff9c4; font-weight: bold; padding: 2px 0; border-radius: 2px; }
+    .expired-tag { color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    
+    .btn {
+      padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc;
+      background: #fff; cursor: pointer; font-size: 13px; color: #333;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #e0e0e0; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .btn-danger { color: #d32f2f; border-color: #ffcdd2; background: #ffebee; }
+    .btn-danger:hover { background: #ffcdd2; }
+
+    /* 警告按鈕 */
+    .btn-warning { color: #e65100; border-color: #ffe0b2; background: #fff3e0; }
+    .btn-warning:hover { background: #ffe0b2; }
+    
+    /* 匯入匯出按鈕樣式 */
+    .btn-io { color: #1565c0; border-color: #bbdefb; background: #e3f2fd; }
+    .btn-io:hover { background: #bbdefb; }
+
+    .btn-sm { padding: 4px 8px; font-size: 12px; margin-left: 4px; }
+    
+    .empty-state { padding: 40px; text-align: center; color: #999; flex-grow: 1; display: flex; align-items: center; justify-content: center;}
+
+    .pagination {
+      padding: 12px 15px; border-top: 1px solid #eee;
+      display: flex; justify-content: center; align-items: center; gap: 15px;
+      background: #fafafa;
+    }
+    .page-info { font-size: 13px; color: #555; font-weight: 600; }
+    #listContainer { flex-grow: 1; }
+
+    /* === Modal Styles === */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5); z-index: 1000;
+      display: none; justify-content: center; align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-content {
+      background: #fff; padding: 25px; border-radius: 8px; width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); text-align: center;
+    }
+    .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1565c0; }
+    .modal-text { margin-bottom: 20px; color: #555; line-height: 1.5; }
+    .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+    
+    .btn-trust { 
+      background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; 
+      padding: 12px; font-size: 14px; font-weight: bold;
+    }
+    .btn-trust:hover { background: #c8e6c9; }
+    
+    .btn-safe { 
+      background: #fff3e0; color: #ef6c00; border: 1px solid #ffcc80; 
+      padding: 12px; font-size: 14px; font-weight: bold;
+    }
+    .btn-safe:hover { background: #ffe0b2; }
+
+    .btn-cancel { border: none; background: transparent; color: #888; text-decoration: underline; margin-top: 5px; }
+    .btn-cancel:hover { color: #555; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>快取資料管理</h1>
+      <div class="stats">這些是目前儲存在您電腦中的頻道名稱對照表</div>
+    </div>
+    <div id="statsText" class="stats">讀取中...</div>
+    <a href="../scraper_test/scraper_test.html" target="_blank" class="btn" style="
+            text-decoration: none; 
+            display: flex; 
+            align-items: center; 
+            background-color: #e8f5e9; 
+            color: #2e7d32; 
+            border: 1px solid #a5d6a7;
+            font-weight: bold;
+        ">
+          🧪 爬蟲實驗室
+        </a>
+  </div>
+  
+  <div class="card">
+    <div class="toolbar">
+      <input type="text" id="searchInput" class="search-box" placeholder="搜尋 Handle ID 或名稱..." autocomplete="off">
+      <div class="toolbar-actions">
+        <!-- 批次按鈕區 -->
+        <span id="batchActions" style="display:none">
+            <button id="batchExpireBtn" class="btn btn-warning">標記選取過期</button>
+            <button id="batchDeleteBtn" class="btn btn-danger">刪除選取</button>
+        </span>
+        <div style="width: 1px; height: 24px; background: #eee; margin: 0 4px;"></div>
+        
+        <!-- 匯入匯出區 -->
+        <button id="exportBtn" class="btn btn-io">匯出</button>
+        <button id="importBtn" class="btn btn-io">匯入</button>
+        <input type="file" id="importFile" accept=".json" style="display:none">
+
+        <button id="refreshBtn" class="btn">重新整理</button>
+        <button id="clearBtn" class="btn btn-danger">清除所有資料</button>
+      </div>
+    </div>
+
+    <div id="tableWrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-check"><input type="checkbox" id="selectAll"></th>
+                    <th class="col-id sortable" data-sort="id">Handle ID</th>
+                    <th class="col-name sortable" data-sort="name">顯示名稱</th>
+                    <th class="col-subs sortable" data-sort="subs">訂閱數</th>
+                    <th class="col-time sortable" data-sort="ts">狀態</th>
+                    <th class="col-action">操作</th>
+                </tr>
+            </thead>
+            <tbody id="listBody">
+                <!-- 資料將渲染在此 -->
+            </tbody>
+        </table>
+    </div>
+    <div id="emptyState" class="empty-state" style="display:none;"></div>
+
+    <div class="pagination" id="paginationControl" style="display:none;">
+      <button id="prevBtn" class="btn btn-sm">上一頁</button>
+      <span id="pageInfo" class="page-info">1 / 1</span>
+      <button id="nextBtn" class="btn btn-sm">下一頁</button>
+    </div>
+  </div>
+
+  <!-- 匯入選項彈窗 -->
+  <div id="importModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-title">匯入資料選項</div>
+      <div class="modal-text">
+        準備匯入 <strong id="importCount" style="color:#333">0</strong> 筆資料。<br>
+        請選擇您要如何處理這批名單：
+      </div>
+      <div class="modal-actions">
+        <button id="btnTrust" class="btn btn-trust">
+          🛡️ 信任匯入 (保留原始時間)<br>
+          <span style="font-weight:normal; font-size:12px">官方名單適用 (有訂閱數的帳號將自動更新)</span>
+        </button>
+        <button id="btnSafe" class="btn btn-safe">
+          ⚠️ 安全匯入 (標記為過期)<br>
+          <span style="font-weight:normal; font-size:12px">系統將在背景自動重新驗證所有資料</span>
+        </button>
+        <button id="btnCancel" class="btn btn-cancel">取消匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/shared/config.js"></script>
+  <script src="../../js/shared/utils.js"></script>
+  <script src="data_manager.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>
