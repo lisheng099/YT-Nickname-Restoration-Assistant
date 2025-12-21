@@ -25,9 +25,9 @@ class PageScanner {
     // === [選擇器配置表] (維持不變) ===
     this.targetConfigs = [
         { sel: "ytd-pinned-comment-badge-renderer #label", mode: this.MODE.EMBEDDED },
+        { sel: "yt-live-chat-banner-redirect-renderer #banner-text span", mode: this.MODE.EMBEDDED },
         { sel: "yt-live-chat-banner-poll-renderer #metadata-text", mode: this.MODE.WRAPPER },
         { sel: "yt-live-chat-poll-header-renderer .metadata", mode: this.MODE.WRAPPER },
-        { sel: "yt-live-chat-banner-redirect-renderer #banner-text span", mode: this.MODE.WRAPPER },
         { sel: "ytd-comment-renderer #author-text span", mode: this.MODE.STANDARD },
         { sel: "ytd-comment-view-model #author-text span", mode: this.MODE.STANDARD },
         { sel: "ytd-comment-view-model h3 > a", mode: this.MODE.STANDARD },
