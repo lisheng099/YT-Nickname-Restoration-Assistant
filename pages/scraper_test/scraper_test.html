@@ -1,3 +1,49 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <title>YT 爬蟲診斷與強制更新</title>
+  <style>
+    /* 沿用原本的樣式，確保排版正常 */
+    body {
+      font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+      background: #f5f5f5; padding: 30px; margin: 0;
+      display: flex; justify-content: center;
+    }
+    .container {
+      background: #fff; width: 500px; padding: 30px;
+      border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 { margin-top: 0; color: #d32f2f; font-size: 22px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+    
+    .input-group { margin: 20px 0; display: flex; gap: 10px; }
+    input[type="text"] {
+      flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px;
+    }
+    button {
+      padding: 10px 20px; background: #d32f2f; color: #fff; border: none; 
+      border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #b71c1c; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+
+    .result-box {
+      background: #fafafa; border: 1px solid #eee; border-radius: 6px;
+      padding: 15px; margin-top: 20px; min-height: 100px;
+    }
+    .row { display: flex; margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+    .label { width: 80px; font-weight: bold; color: #555; }
+    .value { flex-grow: 1; color: #333; font-family: monospace; font-size: 14px; word-break: break-all; }
+    
+    .status-ok { color: #2e7d32; font-weight: bold; }
+    .status-err { color: #d32f2f; font-weight: bold; }
+
+    .note { font-size: 12px; color: #888; margin-top: 10px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
 <div class="container">
   <h1>🕷️ 爬蟲診斷與強制更新</h1>
   
@@ -35,3 +81,8 @@
     2. 若某個頻道的名稱一直顯示舊資料，可在此手動強制更新。
   </div>
 </div>
+
+<script src="scraper_test.js"></script>
+
+</body>
+</html>
