@@ -33,6 +33,10 @@ class PageScanner {
         mode: this.MODE.EMBEDDED,
       },
       {
+        sel: "yt-gift-message-view-model #author-name",
+        mode: this.MODE.STANDARD,
+      },
+      {
         sel: "yt-live-chat-banner-poll-renderer #metadata-text",
         mode: this.MODE.WRAPPER,
       },

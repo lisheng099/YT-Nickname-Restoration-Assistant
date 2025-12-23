@@ -3,7 +3,7 @@
 // 用途：集中管理應用程式的所有參數設定，方便後續維護與調整。
 // ===========================================================
 
-const globalScope = (typeof window !== "undefined") ? window : self;
+const globalScope = typeof window !== "undefined" ? window : self;
 
 globalScope.AppConfig = {
   // 快取儲存鍵值 (Storage Key)
@@ -37,6 +37,6 @@ globalScope.AppConfig = {
   // 用途：設定每次爬蟲抓取後的延遲時間範圍（毫秒），以降低被 YouTube 偵測為機器人的風險。
   SPEED_PRESETS: {
     NORMAL: { MIN: 1200, MAX: 2500 }, // 一般模式：隨機延遲 1.2 ~ 2.5 秒
-    SLOW:   { MIN: 3500, MAX: 6000 }  // 安全模式：隨機延遲 3.5 ~ 6.0 秒 (適用於高風險情境)
-  }
+    SLOW: { MIN: 3500, MAX: 6000 }, // 安全模式：隨機延遲 3.5 ~ 6.0 秒 (適用於高風險情境)
+  },
 };

@@ -1,158 +1,180 @@
 // ===========================================================
-// bg_cache.js - 背景快取管理器 (Background Cache Manager)
-// 用途：在 Service Worker 中統一管理快取資料，避免每個分頁重複載入。
+// bg_cache.js - IndexedDB 背景快取管理器 (Buffered Write 版)
+// 用途：使用 IndexedDB 儲存海量資料，並實作寫入緩衝與 V1 遷移。
 // ===========================================================
 
 const BgCache = {
-  data: {},
-  isLoaded: false,
-  dirtySet: new Set(),
+  memoryCache: new Map(),
+  MAX_MEM_SIZE: 1000,
+
+  // 寫入緩衝區
+  pendingWrites: new Map(),
   saveTimer: null,
-  SAVE_DELAY: 2000, // 寫入防抖延遲
-  LOCK_NAME: "yt_realname_storage_lock", // 與 manager.js 共用鎖定名稱
+  SAVE_DELAY: 2000,
+  BATCH_LIMIT: 50,
+  isMigrating: false,
 
-  // 初始化
-  init: function() {
-    this.loadFromDisk();
-
-    // 監聽來自 Manager 頁面的外部變更，保持同步
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes[AppConfig.CACHE_KEY]) {
-        this.loadFromDisk();
-      }
-    });
+  init: async function () {
+    await this.tryMigrateFromV1();
+    Logger.info("[BgCache] IndexedDB (Buffered) 模式已啟動");
   },
 
-  // 從硬碟載入
-  loadFromDisk: function() {
-    chrome.storage.local.get(AppConfig.CACHE_KEY, (res) => {
-        const raw = res[AppConfig.CACHE_KEY] || {};
-        
-        const cleanData = {};
-        for (const [key, val] of Object.entries(raw)) {
-            let entry = val;
-
-            // 相容舊版或匯入的「純字串」格式
-            if (typeof val === "string") {
-                entry = { 
-                    name: val, 
-                    subs: 0, 
-                    ts: 0 
-                };
-            }
-
-            // 確保資料有效且包含 name 欄位
-            if (entry && entry.name) {
-                cleanData[key] = entry;
-            }
-        }
-
-        // 防止正在寫入的資料被硬碟舊資料覆蓋
-        // 如果目前有尚未寫入硬碟的資料 (Dirty Data)，強制將記憶體中的最新版本合併回去
-        this.dirtySet.forEach(handle => {
-             // 必須確認 this.data[handle] 存在 (從當前記憶體讀取)
-             if (this.data[handle]) {
-                 cleanData[handle] = this.data[handle];
-             }
-        });
-
-        this.data = cleanData;
-        this.isLoaded = true;
-        
-        if (AppConfig.DEBUG_MODE) {
-            console.log(`[BgCache] 快取已同步，共 ${Object.keys(this.data).length} 筆 (含 ${this.dirtySet.size} 筆未存檔)`);
-        }
-    });
-  },
-
-  // 查詢資料
-  get: function(handle) {
-    return this.data[handle] || null;
-  },
-
-  // 更新資料 (暫存於記憶體並排程寫入)
-  set: function(handle, info) {
-    if (!handle || !info) return;
-    
-    // 更新記憶體
-    this.data[handle] = { 
-        name: info.name, 
-        subs: info.subs || 0, 
-        ts: Date.now() 
-    };
-    
-    this.dirtySet.add(handle);
-    this.scheduleSave();
-  },
-
-  // 排程存檔
-  scheduleSave: function() {
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.saveToDisk(), this.SAVE_DELAY);
-  },
-
-  // 寫入硬碟 (使用 Web Locks API 防止與 Manager 衝突)
-  saveToDisk: function() {
-    if (this.dirtySet.size === 0) return;
-
-    // 複製目前要存的 keys，避免異步執行時 dirtySet 變動
-    const keysToSave = Array.from(this.dirtySet);
-    
-    // 請求鎖定
-    navigator.locks.request(this.LOCK_NAME, async () => {
-        return new Promise((resolve) => {
-            // 讀取最新 Storage (避免覆蓋 Manager 的刪除操作)
-            chrome.storage.local.get(AppConfig.CACHE_KEY, (res) => {
-                const diskData = res[AppConfig.CACHE_KEY] || {};
-                
-                // 合併變更
-                keysToSave.forEach(key => {
-                    // 再次確認記憶體中是否有資料
-                    if (this.data[key]) {
-                        diskData[key] = this.data[key];
-                    }
-                });
-
-                // 寫回
-                chrome.storage.local.set({ [AppConfig.CACHE_KEY]: diskData }, () => {
-                    // 清除已儲存的標記
-                    keysToSave.forEach(k => this.dirtySet.delete(k));
-                    if (AppConfig.DEBUG_MODE) {
-                        console.log(`[BgCache] 已同步 ${keysToSave.length} 筆資料至硬碟`);
-                    }
-                    resolve();
-                });
-            });
-        });
-    }).catch(err => console.error("[BgCache] Save Error:", err));
-  }
-};
-
-// 監聽訊息
-chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
-  if (req.type === "CACHE_GET") {
-    // 如果尚未載入完成，嘗試載入後再回傳
-    if (!BgCache.isLoaded) {
-       chrome.storage.local.get(AppConfig.CACHE_KEY, (res) => {
-           const raw = res[AppConfig.CACHE_KEY] || {};
-           // 緊急載入，不覆蓋既有資料，僅作填充
-           if (Object.keys(BgCache.data).length === 0) {
-               BgCache.data = raw;
-           }
-           BgCache.isLoaded = true;
-           sendResponse(BgCache.get(req.handle));
-       });
-       return true; // 保持通道開啟
+  // === [新增] 快速取得總數 (給 Popup 使用) ===
+  getCount: async function () {
+    try {
+      // 讀取所有 Key 比讀取所有 Value 快很多
+      const keys = await idbKeyval.keys();
+      return keys.length;
+    } catch (e) {
+      Logger.red("[BgCache] getCount Error:", e);
+      return 0;
     }
-    sendResponse(BgCache.get(req.handle));
-    return false; // 同步回傳
-  } 
-  
-  if (req.type === "CACHE_SET") {
-    BgCache.set(req.handle, req.data);
-    sendResponse({ success: true });
-    return false;
-  }
-});
+  },
 
-BgCache.init();
+  // === V1 資料遷移邏輯 ===
+  tryMigrateFromV1: function () {
+    return new Promise((resolve) => {
+      const legacyKey = AppConfig.CACHE_KEY;
+      chrome.storage.local.get(legacyKey, async (res) => {
+        const oldData = res[legacyKey];
+        if (!oldData || Object.keys(oldData).length === 0) {
+          resolve();
+          return;
+        }
+
+        Logger.orange(
+          `[Migration] 發現舊版 V1 資料，準備遷移 ${
+            Object.keys(oldData).length
+          } 筆...`
+        );
+        this.isMigrating = true;
+
+        const entries = Object.entries(oldData);
+        const migrationPromises = [];
+
+        for (const [handle, val] of entries) {
+          let entry = val;
+          if (typeof val === "string") entry = { name: val, subs: 0, ts: 0 };
+
+          if (entry && entry.name) {
+            if (!entry.ts) entry.ts = Date.now();
+            migrationPromises.push(idbKeyval.set(handle, entry));
+            this.setMemory(handle, entry); // 同步熱身
+          }
+        }
+
+        try {
+          await Promise.all(migrationPromises);
+          Logger.green(`[Migration] 遷移成功！`);
+          // 遷移成功後刪除舊資料
+          chrome.storage.local.remove(legacyKey, () => {
+            this.isMigrating = false;
+            resolve();
+          });
+        } catch (err) {
+          Logger.red(`[Migration] 遷移失敗，保留舊資料。`, err);
+          this.isMigrating = false;
+          resolve();
+        }
+      });
+    });
+  },
+
+  // === 核心讀取邏輯 ===
+  get: async function (handle) {
+    if (!handle) return null;
+
+    // 1. 查記憶體
+    if (this.memoryCache.has(handle)) {
+      return this.memoryCache.get(handle);
+    }
+
+    // 2. 查緩衝區
+    if (this.pendingWrites.has(handle)) {
+      return this.pendingWrites.get(handle);
+    }
+
+    // 3. 查硬碟
+    try {
+      const diskData = await idbKeyval.get(handle);
+      if (diskData) {
+        this.setMemory(handle, diskData);
+        return diskData;
+      }
+    } catch (err) {
+      Logger.red(`[Cache] IDB Read Error:`, err);
+    }
+    return null;
+  },
+
+  // === 寫入邏輯 ===
+  set: function (handle, data) {
+    if (!handle || !data) return;
+
+    const cacheItem = {
+      name: data.name,
+      subs: data.subs || 0,
+      ts: data.ts || Date.now(),
+    };
+
+    // 1. 更新記憶體
+    this.setMemory(handle, cacheItem);
+
+    // 2. 加入緩衝區
+    this.pendingWrites.set(handle, cacheItem);
+
+    // 3. 判斷寫入時機
+    if (this.pendingWrites.size >= this.BATCH_LIMIT) {
+      this.flushToDisk();
+    } else {
+      this.scheduleFlush();
+    }
+  },
+
+  scheduleFlush: function () {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.flushToDisk(), this.SAVE_DELAY);
+  },
+
+  flushToDisk: async function () {
+    if (this.pendingWrites.size === 0) return;
+
+    const entries = Array.from(this.pendingWrites.entries());
+    this.pendingWrites.clear();
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+
+    try {
+      if (idbKeyval.setMany) {
+        await idbKeyval.setMany(entries);
+      } else {
+        await Promise.all(entries.map(([k, v]) => idbKeyval.set(k, v)));
+      }
+
+      if (AppConfig.DEBUG_MODE) {
+        Logger.info(`[BgCache] 批次寫入 ${entries.length} 筆成功`);
+      }
+    } catch (err) {
+      Logger.red(`[BgCache] 寫入失敗!`, err);
+    }
+  },
+
+  setMemory: function (handle, item) {
+    if (this.memoryCache.size >= this.MAX_MEM_SIZE) {
+      const firstKey = this.memoryCache.keys().next().value;
+      this.memoryCache.delete(firstKey);
+    }
+    this.memoryCache.set(handle, item);
+  },
+
+  delete: async function (handle) {
+    this.memoryCache.delete(handle);
+    this.pendingWrites.delete(handle);
+    await idbKeyval.del(handle);
+  },
+
+  clear: async function () {
+    this.memoryCache.clear();
+    this.pendingWrites.clear();
+    await idbKeyval.clear();
+  },
+};

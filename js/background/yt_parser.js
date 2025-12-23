@@ -5,22 +5,22 @@
 
 const YTParser = {
   // 主解析函式
-  parse: function(htmlText) {
+  parse: function (htmlText) {
     if (!htmlText) return null;
 
     // 1. 提取 ytInitialData JSON
     // 這是 YouTube 存放頁面資料的核心物件
     const jsonMatch = htmlText.match(/ytInitialData\s*=\s*({.+?});/);
     if (!jsonMatch) {
-        return null; // 找不到資料結構
+      return null; // 找不到資料結構
     }
 
     let jsonData;
     try {
-        jsonData = JSON.parse(jsonMatch[1]);
+      jsonData = JSON.parse(jsonMatch[1]);
     } catch (e) {
-        console.error("[YTParser] JSON Parse Error", e);
-        return null;
+      console.error("[YTParser] JSON Parse Error", e);
+      return null;
     }
 
     // 2. 遍歷 JSON 尋找資料
@@ -28,15 +28,16 @@ const YTParser = {
     let name = null;
     let subs = null;
 
-    const pageHeader = jsonData.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
-    
+    const pageHeader =
+      jsonData.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+
     if (pageHeader) {
       // 抓取名稱
       name = pageHeader.title?.dynamicTextViewModel?.text?.content;
 
       // 抓取訂閱數 (通常在 metadataRows 的不同位置)
       const rows = pageHeader.metadata?.contentMetadataViewModel?.metadataRows;
-      
+
       if (rows && rows.length > 1) {
         // 情況 A: 標準版面，訂閱數在第二行
         const parts = rows[1].metadataParts;
@@ -47,7 +48,12 @@ const YTParser = {
         // 情況 B: 簡約版面，嘗試在第一行尋找關鍵字
         const parts = rows[0].metadataParts;
         if (parts) {
-          const subPart = parts.find(p => p.text?.content && (p.text.content.includes("訂閱") || p.text.content.includes("subscribers")));
+          const subPart = parts.find(
+            (p) =>
+              p.text?.content &&
+              (p.text.content.includes("訂閱") ||
+                p.text.content.includes("subscribers"))
+          );
           if (subPart) subs = subPart.text.content;
         }
       }
@@ -61,26 +67,26 @@ const YTParser = {
     let numericSubs = subs ? this.parseSubsString(subs) : 0;
     if (numericSubs < 500) numericSubs = 0; // 過濾 500 以下的訂閱數
 
-    return { 
-        nameRaw: name, 
-        subs: numericSubs 
+    return {
+      nameRaw: name,
+      subs: numericSubs,
     };
   },
 
   // 輔助函式：將訂閱數字串轉為數字
-  parseSubsString: function(str) {
+  parseSubsString: function (str) {
     if (!str) return 0;
     // 移除所有非數字和小數點的字元
-    let val = parseFloat(str.replace(/[^0-9.]/g, ''));
+    let val = parseFloat(str.replace(/[^0-9.]/g, ""));
     if (isNaN(val)) return 0;
-    
+
     const upper = str.toUpperCase();
-    if (upper.includes('K')) val *= 1000;
-    else if (upper.includes('M')) val *= 1000000;
-    else if (upper.includes('B')) val *= 1000000000;
-    else if (upper.includes('萬')) val *= 10000;
-    else if (upper.includes('億')) val *= 100000000;
-    
+    if (upper.includes("K")) val *= 1000;
+    else if (upper.includes("M")) val *= 1000000;
+    else if (upper.includes("B")) val *= 1000000000;
+    else if (upper.includes("萬")) val *= 10000;
+    else if (upper.includes("億")) val *= 100000000;
+
     return Math.floor(val);
-  }
+  },
 };
