@@ -10,6 +10,9 @@ const {
   CLICK_TO_COPY_KEY,
   FETCH_SPEED_KEY,
   DEFAULT_MAX_LENGTH,
+  DEFAULT_TTL_DAYS,
+  DEFAULT_DELETE_DAYS,
+  DEFAULT_DEBUG_MODE,
 } = window.AppConfig;
 const countEl = document.getElementById("countText");
 const openBtn = document.getElementById("openManagerBtn");
@@ -21,8 +24,11 @@ const maxLengthInput = document.getElementById("maxLengthInput");
 const clickToCopyInput = document.getElementById("clickToCopyInput");
 const fetchSpeedSelect = document.getElementById("fetchSpeedSelect");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+const ttlDaysInput = document.getElementById("ttlDaysInput");
+const deleteDaysInput = document.getElementById("deleteDaysInput");
+const debugModeInput = document.getElementById("debugModeInput");
 
-// === [修改] 更新統計數據 (改向 Background 詢問) ===
+// === 更新統計數據 (向 Background 詢問) ===
 function updateStats() {
   // 顯示讀取中狀態...
   countEl.textContent = "...";
@@ -48,11 +54,20 @@ function loadSettings() {
     [SETTINGS_KEY, CLICK_TO_COPY_KEY, FETCH_SPEED_KEY],
     (res) => {
       const settings = res[SETTINGS_KEY] || {};
+
+      // 讀取或是使用預設值
       maxLengthInput.value = settings.maxLength || DEFAULT_MAX_LENGTH;
+      ttlDaysInput.value = settings.ttlDays || DEFAULT_TTL_DAYS;
+      deleteDaysInput.value = settings.deleteDays || DEFAULT_DELETE_DAYS;
+
+      // Checkbox 處理 (若沒設定過，使用預設值)
+      if (settings.debugMode !== undefined) {
+        debugModeInput.checked = settings.debugMode;
+      } else {
+        debugModeInput.checked = DEFAULT_DEBUG_MODE;
+      }
 
       clickToCopyInput.checked = res[CLICK_TO_COPY_KEY] === true;
-
-      // 預設速度模式為 NORMAL
       fetchSpeedSelect.value = res[FETCH_SPEED_KEY] || "NORMAL";
     }
   );
@@ -60,15 +75,21 @@ function loadSettings() {
 
 // 儲存設定事件
 saveSettingsBtn.addEventListener("click", () => {
-  const val = parseInt(maxLengthInput.value, 10);
+  const maxLength = parseInt(maxLengthInput.value, 10);
+  const ttlDays = parseInt(ttlDaysInput.value, 10);
+  const deleteDays = parseInt(deleteDaysInput.value, 10);
+
   const isClickToCopy = clickToCopyInput.checked;
+  const isDebugMode = debugModeInput.checked;
   const speedMode = fetchSpeedSelect.value;
 
-  // 驗證輸入值
-  if (isNaN(val) || val < 5 || val > 50) {
-    alert("請輸入 5 到 50 之間的數字");
-    return;
-  }
+  // 驗證
+  if (isNaN(maxLength) || maxLength < 5 || maxLength > 50)
+    return alert("長度請輸入 5~50");
+  if (isNaN(ttlDays) || ttlDays < 7 || ttlDays > 365) 
+      return alert("過期天數請設定在 7 ~ 365 天之間");
+  if (isNaN(deleteDays) || deleteDays < ttlDays || deleteDays > 730)
+    return alert("刪除天數不能小於過期天數，不可大於兩年 (730 天)");
 
   // 寫入 Storage (設定依然存在 storage.local，這是正確的)
   chrome.storage.local.get(SETTINGS_KEY, (res) => {
@@ -76,7 +97,10 @@ saveSettingsBtn.addEventListener("click", () => {
 
     const newSettings = {
       ...currentSettings,
-      maxLength: val,
+      maxLength: maxLength,
+      ttlDays: ttlDays,
+      deleteDays: deleteDays,
+      debugMode: isDebugMode,
     };
 
     chrome.storage.local.set(
@@ -122,6 +146,14 @@ const manifestData = chrome.runtime.getManifest();
 const versionSpan = document.getElementById("appVersion");
 if (versionSpan) {
   versionSpan.textContent = "v" + manifestData.version;
+}
+
+// X 回報按鈕事件
+const twitterBtn = document.getElementById("openTwitterBtn");
+if (twitterBtn) {
+  twitterBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: "https://x.com/Boo12087" });
+  });
 }
 
 // 初始化執行

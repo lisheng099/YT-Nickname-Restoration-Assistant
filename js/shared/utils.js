@@ -1,5 +1,5 @@
 // ===========================================================
-// Utils.js - 通用工具函式庫 (通用版)
+// Utils.js - 通用工具函式庫
 // 用途：封裝應用程式共用的基礎功能，如日誌記錄與字串處理。
 // ===========================================================
 
@@ -8,6 +8,29 @@ const _global = typeof window !== "undefined" ? window : self;
 
 // 確保全域設定已載入
 const _Config = _global.AppConfig || { DEBUG_MODE: true };
+
+// === 同步 Storage 設定 ===
+// 初始化時讀取設定
+if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+  chrome.storage.local.get(_Config.SETTINGS_KEY, (res) => {
+    const settings = res[_Config.SETTINGS_KEY];
+    if (settings && settings.debugMode !== undefined) {
+      _Config.DEBUG_MODE = settings.debugMode;
+    } else {
+      _Config.DEBUG_MODE = _Config.DEFAULT_DEBUG_MODE;
+    }
+  });
+
+  // 監聽變化
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[_Config.SETTINGS_KEY]) {
+      const newVal = changes[_Config.SETTINGS_KEY].newValue;
+      if (newVal && newVal.debugMode !== undefined) {
+        _Config.DEBUG_MODE = newVal.debugMode;
+      }
+    }
+  });
+}
 
 // === Logger 日誌封裝 ===
 const Logger = {

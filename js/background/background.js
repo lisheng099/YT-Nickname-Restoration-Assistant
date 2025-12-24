@@ -1,10 +1,9 @@
 // ===========================================================
-// background.js - 核心服務 (Controller - IDB版)
+// background.js - 核心服務
 // ===========================================================
 
 // 1. 引入依賴 (注意順序)
 try {
-  // [修正] importScripts 順序非常重要，必須依照依賴關係排列
   importScripts(
     "../shared/config.js", // 1. 基礎設定 (AppConfig) 必須最先載入
     "../shared/utils.js", // 2. 工具函式 (Logger) 依賴 Config
@@ -32,7 +31,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 
-  // === [新增] Popup 請求總數 ===
+  // === 強制讓 Memory Cache 失效 (同步 Manager 操作) ===
+  if (request.type === "CACHE_INVALIDATE") {
+    BgCache.invalidateMemory(request.handles);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // === 清空 Memory Cache ===
+  if (request.type === "CACHE_CLEAR_MEM") {
+    BgCache.clear(); // 這裡我們直接呼叫 clear，因為 clear 也包含了清空 memory
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // === Popup 請求總數 ===
   if (request.type === "GET_CACHE_COUNT") {
     BgCache.getCount().then((count) => {
       sendResponse({ count: count });
@@ -57,6 +70,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// === 監聽分頁關閉事件 (防止 Memory Leak) ===
+chrome.tabs.onRemoved.addListener((tabId) => {
+  BgFetcher.cleanupTab(tabId);
+});
+
 // 3. 核心查詢順序控制
 async function handleCacheGet(handle, sendResponse) {
   if (!handle) {
@@ -78,7 +96,7 @@ async function handleCacheGet(handle, sendResponse) {
       sendResponse({
         name: result.nameRaw,
         subs: result.subs,
-        isExpired: false, // 剛抓的一定是新的
+        isExpired: false,
       });
     } else {
       sendResponse(null);
@@ -93,7 +111,7 @@ async function handleCacheGet(handle, sendResponse) {
     return;
   }
 
-  // (4) 無資料 -> 回傳 null 引發前台抓取
+  // (4) 無資料 -> 回傳 null 引發後台抓取
   sendResponse(null);
 }
 

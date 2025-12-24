@@ -1,5 +1,5 @@
 // ===========================================================
-// bg_cache.js - IndexedDB 背景快取管理器 (Buffered Write 版)
+// bg_cache.js - IndexedDB 背景快取管理器
 // 用途：使用 IndexedDB 儲存海量資料，並實作寫入緩衝與 V1 遷移。
 // ===========================================================
 
@@ -16,10 +16,61 @@ const BgCache = {
 
   init: async function () {
     await this.tryMigrateFromV1();
+    this.syncSettingsAndPrune();
     Logger.info("[BgCache] IndexedDB (Buffered) 模式已啟動");
   },
 
-  // === [新增] 快速取得總數 (給 Popup 使用) ===
+  // === 設定同步與自動清理 ===
+  syncSettingsAndPrune: function () {
+    const { SETTINGS_KEY, DEFAULT_DELETE_DAYS } = AppConfig;
+
+    chrome.storage.local.get(SETTINGS_KEY, async (res) => {
+      const settings = res[SETTINGS_KEY] || {};
+      const deleteDays = settings.deleteDays || DEFAULT_DELETE_DAYS;
+
+      // 執行清理 (刪除超過 DeleteDays 的資料)
+      await this.pruneOldData(deleteDays);
+    });
+  },
+
+  // === 刪除舊資料邏輯 ===
+  pruneOldData: async function (days) {
+    if (!days || days < 1) return;
+
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - days * ONE_DAY;
+    let deleteCount = 0;
+
+    try {
+      // 取得所有資料並檢查時間戳記
+      const entries = await idbKeyval.entries();
+      const keysToDelete = [];
+
+      for (const [key, val] of entries) {
+        // 相容性檢查：如果是舊字串格式或沒有 ts，暫不刪除
+        if (val && val.ts && val.ts < cutoffTime) {
+          keysToDelete.push(key);
+        }
+      }
+
+      if (keysToDelete.length > 0) {
+        if (idbKeyval.delMany) {
+          await idbKeyval.delMany(keysToDelete);
+        } else {
+          await Promise.all(keysToDelete.map((k) => idbKeyval.del(k)));
+        }
+        keysToDelete.forEach((k) => this.memoryCache.delete(k));
+        deleteCount = keysToDelete.length;
+        Logger.orange(
+          `[AutoClean] 已自動清除 ${deleteCount} 筆超過 ${days} 天的舊資料`
+        );
+      }
+    } catch (e) {
+      Logger.red("[BgCache] AutoPrune Error:", e);
+    }
+  },
+
+  // === 快速取得總數 (給 Popup 使用) ===
   getCount: async function () {
     try {
       // 讀取所有 Key 比讀取所有 Value 快很多
@@ -176,5 +227,19 @@ const BgCache = {
     this.memoryCache.clear();
     this.pendingWrites.clear();
     await idbKeyval.clear();
+  },
+
+  // === 僅作廢記憶體快取 (用於 Manager 同步) ===
+  invalidateMemory: function (handles) {
+    if (!handles) return;
+    const list = Array.isArray(handles) ? handles : [handles];
+    list.forEach((h) => {
+      this.memoryCache.delete(h);
+      // 如果這個 handle 在緩衝區等待寫入，也一併移除，避免覆蓋掉 Manager 的操作
+      this.pendingWrites.delete(h);
+    });
+    Logger.info(
+      `[BgCache] 已作廢 ${list.length} 筆記憶體快取 (同步 Manager 操作)`
+    );
   },
 };

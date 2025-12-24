@@ -1,5 +1,5 @@
 // ===========================================================
-// bg_fetcher.js - 背景網路請求管理器 (Log 全面修復版)
+// bg_fetcher.js - 背景網路請求管理器
 // ===========================================================
 
 const BgFetcher = {
@@ -41,7 +41,7 @@ const BgFetcher = {
     const presets = AppConfig.SPEED_PRESETS;
     if (presets && presets[mode]) {
       this.DELAY = { MIN: presets[mode].MIN, MAX: presets[mode].MAX };
-      // [Log 修復] 恢復顯示時間範圍
+      // 顯示時間範圍
       Logger.info(
         `[BgFetcher] 速度模式更新: ${mode} (${this.DELAY.MIN}-${this.DELAY.MAX}ms)`
       );
@@ -79,7 +79,7 @@ const BgFetcher = {
         this.queue.low.push(taskItem);
       }
 
-      // [Log 修復] 恢復顯示待處理數量
+      // 顯示待處理數量
       const pendingCount = this.queue.high.length + this.queue.low.length;
       Logger.info(
         `[Queue] 加入: ${handle} (優先級: ${priority}, 待處理: ${pendingCount})`
@@ -159,7 +159,7 @@ const BgFetcher = {
       const handle = typeof task === "object" ? task.handle : task;
 
       try {
-        // [Log 修復] 顯示距上次抓取時間
+        // 顯示距上次抓取時間
         const currentGap = Date.now() - this.lastFetchTime;
         const gapInfo =
           this.lastFetchTime === 0 ? "首次執行" : `${currentGap}ms`;
@@ -170,7 +170,7 @@ const BgFetcher = {
         const result = await this.doNetworkFetch(handle);
 
         if (result.success) {
-          // [Log 修復] 恢復顯示訂閱數
+          // 顯示訂閱數
           Logger.green(
             `[Fetch OK] ${handle} -> ${result.nameRaw} (${result.subs})`
           );
@@ -182,7 +182,7 @@ const BgFetcher = {
           if (isBurst && currentTabId) {
             const left = this.tabQuotas.get(currentTabId) - 1;
             this.tabQuotas.set(currentTabId, left);
-            // [Log 修復] 恢復顯示剩餘額度
+            // 顯示剩餘額度
             Logger.info(`[Burst] Tab ${currentTabId} 剩餘額度: ${left}`);
           }
         } else {
@@ -267,6 +267,14 @@ const BgFetcher = {
   resetQuota: function (tabId) {
     if (tabId) this.tabQuotas.set(tabId, this.initialPollQuota);
   },
+  
+  // === 清除已關閉分頁的額度資料 ===
+  cleanupTab: function (tabId) {
+    if (this.tabQuotas.has(tabId)) {
+      this.tabQuotas.delete(tabId);
+      Logger.info(`[BgFetcher] 已清除關閉分頁的 Quota: Tab ${tabId}`);
+    }
+  }
 };
 
 BgFetcher.init();

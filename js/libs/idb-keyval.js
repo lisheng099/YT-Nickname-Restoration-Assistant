@@ -1,7 +1,6 @@
 // idb-keyval v6.2.1 (Manual implementation)
 // 來源參考: https://github.com/jakearchibald/idb-keyval
 // 用途：提供極輕量的 Promise-based IndexedDB 封裝
-// 說明：改用展開版本以避免 Minified Code 造成的 SyntaxError
 
 var idbKeyval = (function (exports) {
   "use strict";

@@ -6,7 +6,35 @@
 
 const DataBridge = {
   // 讓 Scanner 知道是否過期 (用於決定 UI 樣式)
-  TTL: window.AppConfig.TTL,
+  currentTTL: window.AppConfig.DEFAULT_TTL_DAYS * 24 * 60 * 60 * 1000,
+
+  init: function () {
+    this.syncSettings();
+  },
+
+  syncSettings: function () {
+    const { SETTINGS_KEY, DEFAULT_TTL_DAYS } = window.AppConfig;
+
+    // 讀取初始值
+    chrome.storage.local.get(SETTINGS_KEY, (res) => {
+      this.updateTTL(res[SETTINGS_KEY]);
+    });
+
+    // 監聽變化
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes[SETTINGS_KEY]) {
+        this.updateTTL(changes[SETTINGS_KEY].newValue);
+      }
+    });
+  },
+
+  updateTTL: function (settings) {
+    const days =
+      settings && settings.ttlDays
+        ? settings.ttlDays
+        : window.AppConfig.DEFAULT_TTL_DAYS;
+    this.currentTTL = days * 24 * 60 * 60 * 1000;
+  },
 
   // === 核心方法：獲取資料 ===
   // 參數：
@@ -16,7 +44,6 @@ const DataBridge = {
     if (!handle) return;
 
     // 1. 先向背景查詢快取 (Cache First)
-    // 注意：這裡使用 Promise 是為了讓程式碼更乾淨，背景通訊其實是異步的
     const cachedData = await this.queryCache(handle);
 
     // 2. 判斷資料狀態
@@ -48,7 +75,7 @@ const DataBridge = {
           }
           // 計算過期狀態
           const ts = response.ts || 0;
-          const isExpired = Date.now() - ts > this.TTL;
+          const isExpired = Date.now() - ts > this.currentTTL;
 
           resolve({
             name: response.name,
@@ -74,8 +101,11 @@ const DataBridge = {
       (response) => {
         // 錯誤處理
         if (chrome.runtime.lastError || !response || !response.success) {
-          // 即使失敗也可以回傳 null，讓 UI 決定是否要保持原樣
-          // callback(null); // 視需求決定是否要 callback null
+          console.warn("[DataBridge] Fetch failed for:", handle);
+          
+          if (typeof callback === "function") {
+            callback(null); // 關鍵：回傳 null 表示失敗
+          }
           return;
         }
 
@@ -97,3 +127,4 @@ const DataBridge = {
     );
   },
 };
+DataBridge.init();

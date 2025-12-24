@@ -19,10 +19,7 @@ const els = {
   batchActions: document.getElementById("batchActions"),
   batchDeleteBtn: document.getElementById("batchDeleteBtn"),
   batchExpireBtn: document.getElementById("batchExpireBtn"),
-
-  // [重點] 這裡會嘗試取得 labBtn
   labBtn: document.getElementById("labBtn"),
-
   exportBtn: document.getElementById("exportBtn"),
   importBtn: document.getElementById("importBtn"),
   importFile: document.getElementById("importFile"),
@@ -51,12 +48,37 @@ function formatBytes(bytes) {
 }
 
 async function loadData() {
+  // 1. 從資料庫讀取所有資料
   allData = await DataManager.getAllList();
-  const jsonSize = new Blob([JSON.stringify(allData)]).size;
-  els.stats.textContent = `共 ${allData.length} 筆資料 (佔用 ${formatBytes(
-    jsonSize
-  )})`;
+  
+  // 2. 顯示筆數，讓使用者立刻看到結果 (不計算大小)
+  els.stats.textContent = `共 ${allData.length} 筆資料 (計算佔用空間中...)`;
+
+  // 3. 渲染列表，讓畫面有內容
   renderData();
+
+  // 4. 將耗時的「大小計算」丟到 setTimeout 裡非同步執行
+  // 這樣做可以讓主執行緒先去畫畫面，不會因為 JSON.stringify 卡住
+  setTimeout(() => {
+    // 防呆：如果資料被清空了就不算
+    if (!allData || allData.length === 0) {
+        els.stats.textContent = `共 0 筆資料 (佔用 0 B)`;
+        return;
+    }
+
+    try {
+        // 這行最耗時：將巨大物件轉字串並計算 Byte
+        const jsonSize = new Blob([JSON.stringify(allData)]).size;
+        
+        // 計算完畢後，更新 UI 加上大小資訊
+        // 注意：這裡需再次確認 allData.length，確保數字一致
+        els.stats.textContent = `共 ${allData.length} 筆資料 (佔用 ${formatBytes(jsonSize)})`;
+    } catch (err) {
+        console.warn("計算資料大小失敗:", err);
+        // 出錯時至少保留筆數顯示
+        els.stats.textContent = `共 ${allData.length} 筆資料`;
+    }
+  }, 200); // 延遲 200ms，確保介面已經渲染完成後再執行
 }
 
 function renderData() {
@@ -75,6 +97,7 @@ function renderData() {
     );
   }
 
+  // 排序邏輯
   filteredData.sort((a, b) => {
     const valA = a[sortConfig.key];
     const valB = b[sortConfig.key];
@@ -104,21 +127,29 @@ function renderData() {
   els.emptyState.style.display = "none";
 
   let html = "";
-  const TTL = DataManager.TTL;
 
+  // 移除舊的 TTL 變數，改用 item 內建的屬性
   pageItems.forEach((item) => {
-    const isExpired = now - item.ts > TTL;
+    // 依賴 DataManager 算好的 isExpired 屬性
+    const isExpired = item.isExpired;
 
     let statusHtml;
     if (isExpired) {
-      statusHtml = `<span class="expired-tag">已過期</span>`;
+      // === 過期狀態處理 ===
+      const daysLeft = item.daysUntilDelete;
+      let deleteHint = "";
+
+      if (daysLeft <= 0) {
+        deleteHint = `<div style="font-size: 11px; color: #d32f2f; margin-top: 2px;">(即將刪除)</div>`;
+      } else {
+        deleteHint = `<div style="font-size: 11px; color: #888; margin-top: 2px;">(${daysLeft} 天後刪除)</div>`;
+      }
+
+      statusHtml = `<span class="expired-tag">已過期</span>${deleteHint}`;
     } else {
-      const timeLeft = Math.max(0, TTL - (now - item.ts));
-      const hoursLeft = Math.ceil(timeLeft / (1000 * 60 * 60));
-      statusHtml =
-        hoursLeft > 24
-          ? `${Math.floor(hoursLeft / 24)}天後過期`
-          : `${hoursLeft}小時後過期`;
+      // === 有效狀態處理 ===
+      // 這裡簡單顯示有效即可，確保準確
+      statusHtml = `<span style="color: #2e7d32; background: #e8f5e9; padding: 2px 6px; border-radius: 4px; font-size: 12px;">有效</span>`;
     }
 
     const subStr =
@@ -207,12 +238,53 @@ function handleImportFile(event) {
 
 async function finalizeImport(isTrusted) {
   if (!pendingImportData) return;
-  els.modal.classList.remove("active");
-  const count = await DataManager.importData(pendingImportData, isTrusted);
-  alert(`成功匯入 ${count} 筆資料！`);
-  els.importFile.value = "";
-  pendingImportData = null;
-  loadData();
+
+  // 1. 鎖定 UI：防止重複點擊，並給予視覺回饋
+  const processingBtn = isTrusted ? els.btnTrust : els.btnSafe;
+  const originalText = processingBtn.innerHTML; // 暫存原本按鈕文字
+  
+  // 停用所有動作按鈕
+  els.btnTrust.disabled = true;
+  els.btnSafe.disabled = true;
+  els.btnCancel.disabled = true;
+  
+  // 改變按鈕顯示
+  processingBtn.textContent = "⏳ 資料匯入中，請稍候...";
+  processingBtn.style.opacity = "0.7";
+
+  try {
+    // 2. 執行耗時的匯入作業 (讓 UI 有機會渲染，所以稍微讓出執行緒，雖非必須但在單執行緒環境是好習慣)
+    await new Promise(r => requestAnimationFrame(r));
+    
+    const count = await DataManager.importData(pendingImportData, isTrusted);
+
+    // 3. 匯入完成：關閉視窗並重置
+    els.modal.classList.remove("active");
+    
+    // 稍微延遲 alert 讓畫面先變回原狀，體驗較好
+    setTimeout(() => {
+        alert(`🎉 成功匯入 ${count} 筆資料！`);
+        loadData(); // 重新讀取列表
+    }, 50);
+
+  } catch (err) {
+    console.error(err);
+    alert("匯入發生錯誤：" + err.message);
+  } finally {
+    // 4. 清理與復原狀態 (無論成功失敗都要做)
+    els.importFile.value = "";
+    pendingImportData = null;
+    
+    // 復原按鈕狀態 (下次打開才不會壞掉)
+    els.btnTrust.disabled = false;
+    els.btnSafe.disabled = false;
+    els.btnCancel.disabled = false;
+    processingBtn.innerHTML = originalText;
+    processingBtn.style.opacity = "1";
+    
+    // 確保視窗關閉
+    els.modal.classList.remove("active");
+  }
 }
 
 async function deleteItem(id) {
@@ -329,13 +401,6 @@ els.selectAll.onchange = (e) => {
 };
 els.batchDeleteBtn.onclick = batchDelete;
 els.batchExpireBtn.onclick = batchExpire;
-
-// [安全修正] 增加 ?. (Optional Chaining) 防止按鈕不存在時報錯
-if (els.labBtn) {
-  els.labBtn.onclick = () => {
-    window.open("../scraper_test/scraper_test.html");
-  };
-}
 
 els.exportBtn.onclick = handleExport;
 els.importBtn.onclick = () => els.importFile.click();

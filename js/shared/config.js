@@ -19,9 +19,15 @@ globalScope.AppConfig = {
   // 「抓取速度」模式的儲存鍵值 (NORMAL / SLOW)
   FETCH_SPEED_KEY: "yt_realname_fetch_speed",
 
+  // === 預設參數設定 ===
   // 名稱顯示的最大長度
-  // 為了避免版面跑版，超過此長度的名稱將會被截斷並加上省略號。
   DEFAULT_MAX_LENGTH: 20,
+  // 預設資料過期天數
+  DEFAULT_TTL_DAYS: 15,
+  // 預設資料刪除天數
+  DEFAULT_DELETE_DAYS: 30,
+  // 預設 Log 開關
+  DEFAULT_DEBUG_MODE: false,
 
   // TTL (Time To Live)：快取資料的有效期限
   // 計算方式：7天 * 24小時 * 60分 * 60秒 * 1000毫秒
@@ -31,7 +37,7 @@ globalScope.AppConfig = {
   // 除錯模式開關
   // true: 開啟詳細日誌 (Console Log)，便於開發除錯。
   // false: 關閉日誌，適用於正式發布版本，保持 Console 乾淨。
-  DEBUG_MODE: true,
+  DEBUG_MODE: false,
 
   // 抓取速度控制 (Rate Limiting)
   // 用途：設定每次爬蟲抓取後的延遲時間範圍（毫秒），以降低被 YouTube 偵測為機器人的風險。

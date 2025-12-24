@@ -145,10 +145,41 @@
       </div>
 
       <div class="settings-row">
+        <span title="超過此天數的資料將標記為過期並嘗試更新"
+          >過期時間 (天):</span
+        >
+        <input
+          type="number"
+          id="ttlDaysInput"
+          class="settings-input"
+          min="1"
+          max="365"
+        />
+      </div>
+
+      <div class="settings-row">
+        <span title="超過此天數的資料將從硬碟中永久刪除">刪除時間 (天):</span>
+        <input
+          type="number"
+          id="deleteDaysInput"
+          class="settings-input"
+          min="7"
+          max="365"
+        />
+      </div>
+
+      <div class="settings-row">
         <span title="開啟後，點擊還原後的名稱可直接複製頻道網址"
-          >點擊名稱複製網址:</span
+          >點擊複製連結:</span
         >
         <input type="checkbox" id="clickToCopyInput" />
+      </div>
+
+      <div class="settings-row">
+        <span title="開啟後，控制台 (Console) 將顯示運作紀錄"
+          >顯示除錯紀錄 (Log):</span
+        >
+        <input type="checkbox" id="debugModeInput" />
       </div>
 
       <div class="settings-row">
@@ -180,7 +211,13 @@
     </button>
 
     <div class="footer-container">
-      <span id="openReadmeBtn" class="footer-link"> 📜 關於 & 修改紀錄 </span>
+      <span id="openReadmeBtn" class="footer-link">
+        📜 關於 & 修改紀錄
+      </span>
+      <span style="margin: 0 5px; color: #ddd;">|</span>
+      <span id="openTwitterBtn" class="footer-link" style="color: #1da1f2;">
+        🐦 回報問題
+      </span>
     </div>
 
     <script src="../../js/shared/config.js"></script>
