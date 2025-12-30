@@ -5,7 +5,6 @@
 
 const {
   CACHE_KEY,
-  TTL,
   SETTINGS_KEY,
   CLICK_TO_COPY_KEY,
   FETCH_SPEED_KEY,
@@ -13,6 +12,7 @@ const {
   DEFAULT_TTL_DAYS,
   DEFAULT_DELETE_DAYS,
   DEFAULT_DEBUG_MODE,
+  LANG_KEY 
 } = window.AppConfig;
 const countEl = document.getElementById("countText");
 const openBtn = document.getElementById("openManagerBtn");
@@ -27,6 +27,18 @@ const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const ttlDaysInput = document.getElementById("ttlDaysInput");
 const deleteDaysInput = document.getElementById("deleteDaysInput");
 const debugModeInput = document.getElementById("debugModeInput");
+const langSelect = document.getElementById("langSelect"); 
+
+// 語言切換事件
+if (langSelect) {
+  langSelect.addEventListener("change", (e) => {
+    const newLang = e.target.value;
+    chrome.storage.local.set({ [LANG_KEY]: newLang }, async () => {
+      await I18n.init();
+      I18n.render();
+    });
+  });
+}
 
 // === 更新統計數據 (向 Background 詢問) ===
 function updateStats() {
@@ -85,11 +97,11 @@ saveSettingsBtn.addEventListener("click", () => {
 
   // 驗證
   if (isNaN(maxLength) || maxLength < 5 || maxLength > 50)
-    return alert("長度請輸入 5~50");
+    return alert(I18n.t("alert_length_invalid")); 
   if (isNaN(ttlDays) || ttlDays < 7 || ttlDays > 365) 
-      return alert("過期天數請設定在 7 ~ 365 天之間");
+      return alert(I18n.t("alert_ttl_invalid"));
   if (isNaN(deleteDays) || deleteDays < ttlDays || deleteDays > 730)
-    return alert("刪除天數不能小於過期天數，不可大於兩年 (730 天)");
+    return alert(I18n.t("alert_del_invalid"));
 
   // 寫入 Storage (設定依然存在 storage.local，這是正確的)
   chrome.storage.local.get(SETTINGS_KEY, (res) => {
@@ -111,7 +123,7 @@ saveSettingsBtn.addEventListener("click", () => {
       },
       () => {
         const originalText = saveSettingsBtn.textContent;
-        saveSettingsBtn.textContent = "已儲存！";
+        saveSettingsBtn.textContent = I18n.t("saved");
         saveSettingsBtn.style.background = "#2e7d32";
 
         setTimeout(() => {
@@ -156,6 +168,13 @@ if (twitterBtn) {
   });
 }
 
-// 初始化執行
-updateStats();
-loadSettings();
+// 初始化流程
+async function init() {
+  await I18n.init();
+  I18n.render();
+  if (langSelect) langSelect.value = I18n.currentLang;
+  updateStats();
+  loadSettings();
+}
+
+init();

@@ -6,7 +6,7 @@
 
 const DataBridge = {
   // 讓 Scanner 知道是否過期 (用於決定 UI 樣式)
-  currentTTL: window.AppConfig.DEFAULT_TTL_DAYS * 24 * 60 * 60 * 1000,
+  currentTTL: daysToMs(window.AppConfig.DEFAULT_TTL_DAYS),
 
   init: function () {
     this.syncSettings();
@@ -33,7 +33,7 @@ const DataBridge = {
       settings && settings.ttlDays
         ? settings.ttlDays
         : window.AppConfig.DEFAULT_TTL_DAYS;
-    this.currentTTL = days * 24 * 60 * 60 * 1000;
+    this.currentTTL = daysToMs(days);
   },
 
   // === 核心方法：獲取資料 ===

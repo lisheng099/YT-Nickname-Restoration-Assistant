@@ -2,7 +2,7 @@
 <html lang="zh-TW">
   <head>
     <meta charset="utf-8" />
-    <title>YT 爬蟲診斷與強制更新</title>
+    <title data-i18n="scraper_title">YT 指定重新抓取</title>
     <style>
       body {
         font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -104,9 +104,9 @@
   </head>
   <body>
     <div class="container">
-      <h1>🕷️ 爬蟲診斷與強制更新</h1>
+      <h1 data-i18n="scraper_title">🕷️ 指定重新抓取</h1>
 
-      <p style="color: #666; font-size: 14px">
+      <p style="color: #666; font-size: 14px" data-i18n="scraper_desc">
         輸入 Handle ID (例如 @pewdiepie)，系統將<b>忽略本地快取</b>，強制向
         YouTube 重新抓取最新資料。
       </p>
@@ -115,38 +115,43 @@
         <input
           type="text"
           id="handleInput"
+          data-i18n-placeholder="input_placeholder"
           placeholder="@User-ID..."
           value="@"
         />
-        <button id="testBtn">強制抓取 (更新快取)</button>
+        <button id="testBtn" data-i18n="btn_force_fetch">強制抓取 (更新快取)</button>
       </div>
 
       <div class="result-box">
         <div class="row">
-          <div class="label">狀態:</div>
-          <div class="value" id="resStatus">待機中</div>
+          <div class="label" data-i18n="label_status">狀態:</div>
+          <div class="value" id="resStatus" data-i18n="status_standby">待機中</div>
         </div>
         <div class="row">
-          <div class="label">顯示名稱:</div>
+          <div class="label" data-i18n="label_name">顯示名稱:</div>
           <div class="value" id="resName">-</div>
         </div>
         <div class="row">
-          <div class="label">訂閱數:</div>
+          <div class="label" data-i18n="label_subs">訂閱數:</div>
           <div class="value" id="resSubs">-</div>
         </div>
         <div class="row" style="border: none">
-          <div class="label">原始回應:</div>
+          <div class="label" data-i18n="label_raw">原始回應:</div>
           <div class="value" id="resRaw"></div>
         </div>
       </div>
 
       <div class="note">
-        <strong>💡 注意事項：</strong><br />
-        1. 此操作會直接<b>覆寫</b>您電腦中該頻道的快取資料。<br />
-        2. 若某個頻道的名稱一直顯示舊資料，可在此手動強制更新。
+        <strong data-i18n="note_title">💡 注意事項：</strong><br />
+        <span data-i18n="note_1">1. 此操作會直接<b>覆寫</b>您電腦中該頻道的快取資料。</span><br />
+        <span data-i18n="note_2">2. 若某個頻道的名稱一直顯示舊資料，可在此手動強制更新。</span>
       </div>
     </div>
 
+    <script src="../../js/shared/config.js"></script>
+    <script src="../../js/shared/utils.js"></script>
+    <script src="../../js/shared/locales.js"></script>
+    <script src="../../js/shared/i18n.js"></script>
     <script src="scraper_test.js"></script>
   </body>
 </html>

@@ -193,7 +193,7 @@ const TooltipManager = {
 
   bindCopyEvent: function (element, handle) {
     element.style.cursor = "pointer";
-    element.title = "點擊複製連結";
+    element.title = I18n.t("copy_link");
     element.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -201,7 +201,7 @@ const TooltipManager = {
         await navigator.clipboard.writeText(
           `https://www.youtube.com/${handle}`
         );
-        this.showToast("已複製連結");
+        this.showToast(I18n.t("copied"));
       } catch (err) {
         console.error(err);
       }
@@ -237,19 +237,19 @@ const TooltipManager = {
 
     if (subs >= 1000000) {
       i.style.background = "#00BFA5";
-      i.title = "百萬訂閱";
+      i.title = I18n.t("subs_million");
     } else if (subs >= 100000) {
       i.style.background = "#FFD700";
-      i.title = "十萬訂閱";
+      i.title = I18n.t("subs_100k");
     } else if (subs >= 10000) {
       i.style.background = "#C0C0C0";
-      i.title = "萬人訂閱";
+      i.title = I18n.t("subs_10k");
     } else if (subs >= 1000) {
       i.style.background = "#CD7F32";
-      i.title = "千人訂閱";
-    } else {
+      i.title = I18n.t("subs_1000"); 
+    } else if (subs >= 500) {
       i.style.background = "#8D6E63";
-      i.title = "潛力頻道";
+      i.title = I18n.t("subs_potential");
     }
     return i;
   },
@@ -315,7 +315,7 @@ const TooltipManager = {
     if (!this.tooltipEl) this.createTooltipElement();
     this.updateTheme();
 
-    const name = target.dataset.rnName || "Loading...";
+    const name = target.dataset.rnName || I18n.t("loading");
     const handle = target.dataset.rnHandle || "";
     const subs = parseInt(target.dataset.rnSubs || "0");
     const isExpired = target.dataset.rnExpired === "true";
@@ -355,7 +355,7 @@ const TooltipManager = {
       const iconSpan = document.createElement("span");
       iconSpan.textContent = "👥";
       const textSpan = document.createElement("span");
-      textSpan.textContent = `${new Intl.NumberFormat().format(subs)} 訂閱`;
+      textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
       subsDiv.appendChild(iconSpan);
       subsDiv.appendChild(textSpan);
       this.tooltipEl.appendChild(subsDiv);
@@ -370,7 +370,7 @@ const TooltipManager = {
         color: "#ffab91",
         fontSize: "0.85em",
       });
-      expDiv.textContent = "⚠ 資料已過期，等待更新...";
+      expDiv.textContent = I18n.t("data_expired");
       this.tooltipEl.appendChild(expDiv);
     }
 

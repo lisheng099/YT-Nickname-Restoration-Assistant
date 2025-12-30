@@ -36,23 +36,12 @@ const ITEMS_PER_PAGE = 15;
 let sortConfig = { key: "id", direction: "asc" };
 let pendingImportData = null;
 
-function formatBytes(bytes) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB"];
-  let i = 0;
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024;
-    i++;
-  }
-  return `${bytes.toFixed(1)} ${units[i]}`;
-}
-
 async function loadData() {
   // 1. 從資料庫讀取所有資料
   allData = await DataManager.getAllList();
   
   // 2. 顯示筆數，讓使用者立刻看到結果 (不計算大小)
-  els.stats.textContent = `共 ${allData.length} 筆資料 (計算佔用空間中...)`;
+  els.stats.textContent = I18n.t("manager_stats_calculating", { count: allData.length });
 
   // 3. 渲染列表，讓畫面有內容
   renderData();
@@ -62,7 +51,7 @@ async function loadData() {
   setTimeout(() => {
     // 防呆：如果資料被清空了就不算
     if (!allData || allData.length === 0) {
-        els.stats.textContent = `共 0 筆資料 (佔用 0 B)`;
+        els.stats.textContent = I18n.t("manager_stats_zero");
         return;
     }
 
@@ -72,11 +61,12 @@ async function loadData() {
         
         // 計算完畢後，更新 UI 加上大小資訊
         // 注意：這裡需再次確認 allData.length，確保數字一致
-        els.stats.textContent = `共 ${allData.length} 筆資料 (佔用 ${formatBytes(jsonSize)})`;
+        els.stats.textContent = I18n.t("manager_stats_done", { count: allData.length, size: formatBytes(jsonSize) });
+
     } catch (err) {
         console.warn("計算資料大小失敗:", err);
         // 出錯時至少保留筆數顯示
-        els.stats.textContent = `共 ${allData.length} 筆資料`;
+        els.stats.textContent = I18n.t("manager_stats_basic", { count: allData.length });
     }
   }, 200); // 延遲 200ms，確保介面已經渲染完成後再執行
 }
@@ -118,8 +108,8 @@ function renderData() {
     els.tableWrapper.style.display = "none";
     els.emptyState.style.display = "flex";
     els.emptyState.textContent = searchTerm
-      ? "找不到符合搜尋條件的資料"
-      : "目前沒有快取資料";
+      ? I18n.t("empty_search_result")
+      : I18n.t("empty_no_data");
     els.pagination.style.display = "none";
     return;
   }
@@ -140,16 +130,16 @@ function renderData() {
       let deleteHint = "";
 
       if (daysLeft <= 0) {
-        deleteHint = `<div style="font-size: 11px; color: #d32f2f; margin-top: 2px;">(即將刪除)</div>`;
+        deleteHint = `<div style="font-size: 11px; color: #d32f2f; margin-top: 2px;">${I18n.t("status_deleting")}</div>`;
       } else {
-        deleteHint = `<div style="font-size: 11px; color: #888; margin-top: 2px;">(${daysLeft} 天後刪除)</div>`;
+        deleteHint = `<div style="font-size: 11px; color: #888; margin-top: 2px;">(${daysLeft} ${I18n.t("status_days_left")})</div>`;
       }
 
-      statusHtml = `<span class="expired-tag">已過期</span>${deleteHint}`;
+      statusHtml = `<span class="expired-tag">${I18n.t("status_expired")}</span>${deleteHint}`;
     } else {
       // === 有效狀態處理 ===
       // 這裡簡單顯示有效即可，確保準確
-      statusHtml = `<span style="color: #2e7d32; background: #e8f5e9; padding: 2px 6px; border-radius: 4px; font-size: 12px;">有效</span>`;
+      statusHtml = `<span style="color: #2e7d32; background: #e8f5e9; padding: 2px 6px; border-radius: 4px; font-size: 12px;">${I18n.t("status_valid")}</span>`;
     }
 
     const subStr =
@@ -161,7 +151,7 @@ function renderData() {
       ? ""
       : `<button class="btn btn-sm btn-warning expire-btn" data-id="${escapeHtml(
           item.id
-        )}">過期</button>`;
+        )}">${I18n.t("btn_expire")}</button>`; 
 
     html += `<tr>
       <td class="col-check"><input type="checkbox" class="row-check" value="${escapeHtml(
@@ -175,9 +165,9 @@ function renderData() {
         ${expireBtn}
         <button class="btn btn-sm btn-danger del-btn" data-id="${escapeHtml(
           item.id
-        )}">刪除</button>
+        )}">${I18n.t("btn_delete")}</button>
       </td>
-    </tr>`;
+    </tr>`; 
   });
 
   els.listBody.innerHTML = html;
@@ -211,9 +201,7 @@ function handleImportFile(event) {
         const isValid = await DataManager.verifyChecksum(json);
         if (
           !isValid &&
-          !confirm(
-            "⚠️ 警告：檔案完整性驗證失敗！\n\n內容可能已損毀或遭到修改，是否繼續？"
-          )
+          !confirm(I18n.t("import_checksum_fail_confirm"))
         ) {
           els.importFile.value = "";
           return;
@@ -224,12 +212,12 @@ function handleImportFile(event) {
       for (const val of Object.values(dataToImport)) {
         if (val && (val.name || typeof val === "string")) count++;
       }
-      if (count === 0) throw new Error("無效資料");
+      if (count === 0) throw new Error(I18n.t("import_invalid_data"));
       pendingImportData = dataToImport;
       els.importCount.textContent = count;
       els.modal.classList.add("active");
     } catch (err) {
-      alert("匯入失敗：檔案格式錯誤");
+      alert(I18n.t("import_fail") + I18n.t("import_format_error")); 
       els.importFile.value = "";
     }
   };
@@ -249,7 +237,7 @@ async function finalizeImport(isTrusted) {
   els.btnCancel.disabled = true;
   
   // 改變按鈕顯示
-  processingBtn.textContent = "⏳ 資料匯入中，請稍候...";
+  processingBtn.textContent = I18n.t("importing"); 
   processingBtn.style.opacity = "0.7";
 
   try {
@@ -263,13 +251,13 @@ async function finalizeImport(isTrusted) {
     
     // 稍微延遲 alert 讓畫面先變回原狀，體驗較好
     setTimeout(() => {
-        alert(`🎉 成功匯入 ${count} 筆資料！`);
+        alert(I18n.t("import_success", { count })); 
         loadData(); // 重新讀取列表
     }, 50);
 
   } catch (err) {
     console.error(err);
-    alert("匯入發生錯誤：" + err.message);
+    alert(I18n.t("import_fail") + err.message); 
   } finally {
     // 4. 清理與復原狀態 (無論成功失敗都要做)
     els.importFile.value = "";
@@ -298,7 +286,7 @@ async function expireItem(id) {
 async function batchDelete() {
   const ids = getCheckedIds();
   if (ids.length === 0) return;
-  if (confirm(`刪除 ${ids.length} 筆資料？`)) {
+  if (confirm(I18n.t("confirm_delete_batch", { count: ids.length }))) { 
     await DataManager.deleteItems(ids);
     loadData();
   }
@@ -311,7 +299,7 @@ async function batchExpire() {
   }
 }
 async function clearAllData() {
-  if (confirm("確定清空所有資料？")) {
+  if (confirm(I18n.t("confirm_clear_all"))) { 
     await DataManager.clearAll();
     loadData();
   }
@@ -325,9 +313,11 @@ function getCheckedIds() {
 function updateBatchState() {
   const count = document.querySelectorAll(".row-check:checked").length;
   els.batchActions.style.display = count > 0 ? "inline-flex" : "none";
-  if (count > 0) {
-    els.batchDeleteBtn.textContent = `刪除選取 (${count})`;
-    els.batchExpireBtn.textContent = `標記過期 (${count})`;
+  if (count > 0) {  
+    els.batchDeleteBtn.textContent = `${I18n.t("batch_delete")} (${count})`;
+    els.batchExpireBtn.textContent = `${I18n.t("batch_expire")} (${count})`;
+    els.batchDeleteBtn.style.padding = "5px 10px";
+    els.batchExpireBtn.style.padding = "5px 10px";
   }
 }
 function highlightText(text, term) {
@@ -379,15 +369,9 @@ function updatePaginationUI(totalPages, totalItems) {
     return;
   }
   els.pagination.style.display = "flex";
-  els.pageInfo.textContent = `${currentPage} / ${totalPages} 頁 (共 ${totalItems} 筆)`;
+  els.pageInfo.textContent = `${currentPage} / ${totalPages}`;
   els.prevBtn.disabled = currentPage === 1;
   els.nextBtn.disabled = currentPage === totalPages;
-}
-function escapeHtml(str) {
-  if (!str) return "";
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 els.sortHeaders.forEach(
@@ -442,5 +426,8 @@ setInterval(() => {
   }
 }, 5000);
 
-// 初始化
-loadData();
+// 初始化流程
+I18n.init().then(() => {
+  I18n.render();
+  loadData();
+});

@@ -2,7 +2,7 @@
 <html lang="zh-TW">
   <head>
     <meta charset="utf-8" />
-    <title>YT 暱稱還原助手 - 快取管理頁面</title>
+    <title data-i18n="manager_title">YT 暱稱還原助手 - 快取管理頁面</title>
     <style>
       body {
         margin: 0;
@@ -44,12 +44,14 @@
         position: relative;
       }
       .toolbar {
-        padding: 10px 15px;
+        padding: 0 15px;
+        height: 60px;
         border-bottom: 1px solid #eee;
         display: flex;
         justify-content: space-between;
         align-items: center;
         background: #fafafa;
+        overflow: hidden;
       }
       .toolbar-actions {
         display: flex;
@@ -60,9 +62,10 @@
         padding: 6px 10px;
         border: 1px solid #ccc;
         border-radius: 4px;
-        width: 220px;
+        width: 180px;
         font-size: 13px;
         outline: none;
+        margin-right: 5px;
       }
       .search-box:focus {
         border-color: #1565c0;
@@ -327,10 +330,14 @@
   <body>
     <div class="header">
       <div>
-        <h1>快取資料管理</h1>
-        <div class="stats">這些是目前儲存在您電腦中的頻道名稱對照表</div>
+        <h1 data-i18n="manager_title">快取資料管理</h1>
+        <div class="stats" data-i18n="manager_subtitle">這些是目前儲存在您電腦中的頻道名稱對照表</div>
+        
+        <div id="statsText" class="stats" data-i18n="loading" style="margin-top: 5px; color: #1565c0; font-weight: 500;">
+          讀取中...
+        </div>
       </div>
-      <div id="statsText" class="stats">讀取中...</div>
+
       <a
         href="../scraper_test/scraper_test.html" 
         target="_blank"
@@ -345,7 +352,7 @@
           font-weight: bold;
         "
       >
-        🧪 爬蟲實驗室
+        🧪 <span data-i18n="scraper_lab">指定重新抓取</span>
       </a>
     </div>
 
@@ -355,22 +362,23 @@
           type="text"
           id="searchInput"
           class="search-box"
+          data-i18n-placeholder="search_placeholder"
           placeholder="搜尋 Handle ID 或名稱..."
           autocomplete="off"
         />
-        <div class="toolbar-actions">
-          <span id="batchActions" style="display: none">
-            <button id="batchExpireBtn" class="btn btn-warning">
+
+        <span id="batchActions" style="display: none; gap: 8px;">
+            <button id="batchExpireBtn" class="btn btn-warning" data-i18n="batch_expire">
               標記選取過期
             </button>
-            <button id="batchDeleteBtn" class="btn btn-danger">刪除選取</button>
-          </span>
-          <div
-            style="width: 1px; height: 24px; background: #eee; margin: 0 4px"
-          ></div>
+            <button id="batchDeleteBtn" class="btn btn-danger" data-i18n="batch_delete">刪除選取</button>
+        </span>
 
-          <button id="exportBtn" class="btn btn-io">匯出</button>
-          <button id="importBtn" class="btn btn-io">匯入</button>
+        <div class="toolbar-actions">
+          <div style="width: 1px; height: 24px; background: #eee; margin: 0 4px"></div>
+
+          <button id="exportBtn" class="btn btn-io" data-i18n="export">匯出</button>
+          <button id="importBtn" class="btn btn-io" data-i18n="import">匯入</button>
           <input
             type="file"
             id="importFile"
@@ -378,8 +386,8 @@
             style="display: none"
           />
 
-          <button id="refreshBtn" class="btn">重新整理</button>
-          <button id="clearBtn" class="btn btn-danger">清除所有資料</button>
+          <button id="refreshBtn" class="btn" data-i18n="refresh">重新整理</button>
+          <button id="clearBtn" class="btn btn-danger" data-i18n="clear_all">清除所有資料</button>
         </div>
       </div>
 
@@ -390,11 +398,11 @@
               <th class="col-check">
                 <input type="checkbox" id="selectAll" />
               </th>
-              <th class="col-id sortable" data-sort="id">Handle ID</th>
-              <th class="col-name sortable" data-sort="name">顯示名稱</th>
-              <th class="col-subs sortable" data-sort="subs">訂閱數</th>
-              <th class="col-time sortable" data-sort="ts">狀態</th>
-              <th class="col-action">操作</th>
+              <th class="col-id sortable" data-sort="id" data-i18n="col_id">Handle ID</th>
+              <th class="col-name sortable" data-sort="name" data-i18n="col_name">顯示名稱</th>
+              <th class="col-subs sortable" data-sort="subs" data-i18n="col_subs">訂閱數</th>
+              <th class="col-time sortable" data-sort="ts" data-i18n="col_status">狀態</th>
+              <th class="col-action" data-i18n="col_action">操作</th>
             </tr>
           </thead>
           <tbody id="listBody"></tbody>
@@ -403,40 +411,42 @@
       <div id="emptyState" class="empty-state" style="display: none"></div>
 
       <div class="pagination" id="paginationControl" style="display: none">
-        <button id="prevBtn" class="btn btn-sm">上一頁</button>
+        <button id="prevBtn" class="btn btn-sm" data-i18n="prev_page">上一頁</button>
         <span id="pageInfo" class="page-info">1 / 1</span>
-        <button id="nextBtn" class="btn btn-sm">下一頁</button>
+        <button id="nextBtn" class="btn btn-sm" data-i18n="next_page">下一頁</button>
       </div>
     </div>
 
     <div id="importModal" class="modal-overlay">
       <div class="modal-content">
-        <div class="modal-title">匯入資料選項</div>
+        <div class="modal-title" data-i18n="import_title">匯入資料選項</div>
         <div class="modal-text">
-          準備匯入
-          <strong id="importCount" style="color: #333">0</strong> 筆資料。<br />
-          請選擇您要如何處理這批名單：
+          <span data-i18n="import_desc_1">準備匯入</span>
+          <strong id="importCount" style="color: #333">0</strong>
+          <span data-i18n="import_desc_2">筆資料。<br />請選擇您要如何處理這批名單：</span>
         </div>
         <div class="modal-actions">
           <button id="btnTrust" class="btn btn-trust">
-            🛡️ 信任匯入 (保留原始時間)<br />
-            <span style="font-weight: normal; font-size: 12px"
+            <span data-i18n="btn_trust">🛡️ 信任匯入 (保留原始時間)</span><br />
+            <span style="font-weight: normal; font-size: 12px" data-i18n="btn_trust_desc"
               >官方名單適用 (有訂閱數的帳號將自動更新)</span
             >
           </button>
           <button id="btnSafe" class="btn btn-safe">
-            ⚠️ 安全匯入 (標記為過期)<br />
-            <span style="font-weight: normal; font-size: 12px"
+            <span data-i18n="btn_safe">⚠️ 安全匯入 (標記為過期)</span><br />
+            <span style="font-weight: normal; font-size: 12px" data-i18n="btn_safe_desc"
               >系統將在背景自動重新驗證所有資料</span
             >
           </button>
-          <button id="btnCancel" class="btn btn-cancel">取消匯入</button>
+          <button id="btnCancel" class="btn btn-cancel" data-i18n="btn_cancel">取消匯入</button>
         </div>
       </div>
     </div>
 
     <script src="../../js/shared/config.js"></script>
     <script src="../../js/shared/utils.js"></script>
+    <script src="../../js/shared/locales.js"></script>
+    <script src="../../js/shared/i18n.js"></script>
     <script src="../../js/libs/idb-keyval.js"></script>
     <script src="data_manager.js"></script>
     <script src="manager.js"></script>

@@ -19,6 +19,9 @@ globalScope.AppConfig = {
   // 「抓取速度」模式的儲存鍵值 (NORMAL / SLOW)
   FETCH_SPEED_KEY: "yt_realname_fetch_speed",
 
+  // 語言設定鍵值
+  LANG_KEY: "yt_realname_lang",
+
   // === 預設參數設定 ===
   // 名稱顯示的最大長度
   DEFAULT_MAX_LENGTH: 20,
@@ -28,11 +31,8 @@ globalScope.AppConfig = {
   DEFAULT_DELETE_DAYS: 30,
   // 預設 Log 開關
   DEFAULT_DEBUG_MODE: false,
-
-  // TTL (Time To Live)：快取資料的有效期限
-  // 計算方式：7天 * 24小時 * 60分 * 60秒 * 1000毫秒
-  // 說明：設定過短會導致請求頻繁可能被封鎖；設定過長則會導致資料更新不及時。目前設定為 7 天。
-  TTL: 7 * 24 * 60 * 60 * 1000,
+  // 預設語言
+  DEFAULT_LANG: "en",
 
   // 除錯模式開關
   // true: 開啟詳細日誌 (Console Log)，便於開發除錯。
