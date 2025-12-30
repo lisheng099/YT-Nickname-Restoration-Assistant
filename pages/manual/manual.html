@@ -2,15 +2,15 @@
 <html lang="zh-TW">
   <head>
     <meta charset="utf-8" />
-    <title data-i18n="manual_page_title">YT 暱稱還原助手 - 使用說明與關於</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-i18n="manual_page_title">YT 暱稱還原助手 - 使用說明</title>
     <style>
       body {
+        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+        line-height: 1.6;
+        color: #333;
         margin: 0;
         padding: 0;
-        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
-        font-size: 16px;
-        color: #333;
-        line-height: 1.6;
         background-color: #f9f9f9;
       }
       .container {
@@ -20,6 +20,7 @@
         padding: 40px;
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        min-height: 100vh;
       }
       h1 {
         margin-top: 0;
@@ -40,9 +41,7 @@
         font-size: 18px;
         font-weight: 600;
       }
-
-      p,
-      li {
+      p, li {
         margin-bottom: 10px;
       }
       ul {
@@ -66,24 +65,12 @@
         vertical-align: middle;
         margin-left: 8px;
       }
-
-      /* 強調區塊 */
-      .highlight-box {
-        background: #e3f2fd;
-        border: 1px solid #bbdefb;
-        padding: 20px;
-        border-radius: 8px;
-        margin: 20px 0;
+      .note {
+        background-color: #fff3e0;
+        border-left: 5px solid #ff9800;
+        padding: 10px;
+        margin: 15px 0;
       }
-      .highlight-title {
-        font-weight: bold;
-        color: #0d47a1;
-        font-size: 1.1em;
-        margin-bottom: 10px;
-        display: block;
-      }
-
-      /* 技術原理區塊 */
       .tech-box {
         background: #fff3cd;
         border: 1px solid #ffeeba;
@@ -109,14 +96,19 @@
         margin-bottom: 10px;
         display: block;
       }
-
-      .dot {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 5px;
-        vertical-align: middle;
+      .highlight-box {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .highlight-title {
+        font-weight: bold;
+        color: #0d47a1;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+        display: block;
       }
       .intro-card {
         background: #fff3e0;
@@ -125,7 +117,14 @@
         font-size: 0.95em;
         border: 1px solid #ffe0b2;
       }
-
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle;
+      }
       .faq-item {
         margin-bottom: 20px;
       }
@@ -138,6 +137,57 @@
       .a {
         margin-left: 20px;
         color: #444;
+      }
+      .footer {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+        text-align: center;
+        color: #888;
+        font-size: 0.9em;
+      }
+
+      /* 保險絲區塊樣式 */
+      .fuse-card {
+        background-color: #f1f8e9;
+        border: 1px solid #c5e1a5;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+        display: flex;
+        gap: 15px;
+        align-items: flex-start;
+      }
+      .fuse-icon {
+        font-size: 24px;
+        background: #fff;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        flex-shrink: 0;
+      }
+      .fuse-content h4 {
+        margin: 0 0 5px 0;
+        color: #2e7d32;
+        font-size: 1em;
+        font-weight: bold;
+      }
+      .fuse-content p {
+        margin: 0;
+        font-size: 0.95em;
+        color: #555;
+      }
+      /* 警告樣式 */
+      .fuse-warning {
+        background-color: #ffebee;
+        border-color: #ef9a9a;
+      }
+      .fuse-warning .fuse-content h4 {
+        color: #c62828;
       }
 
       @media (max-width: 600px) {
@@ -174,12 +224,12 @@
           <span data-i18n="manual_privacy_1_desc">當擴充功能發現未知的 <code>@ID</code> 時，會在背景對 YouTube 官方頻道頁面發出請求。</span>
         </li>
         <li>
-          <strong data-i18n="manual_privacy_2_title">串流讀取優化 (Stream Parsing)：</strong>
-          <span data-i18n="manual_privacy_2_desc">程式碼採用智慧串流技術，只要讀取到需要的名稱資料，就會立即切斷連線，大幅節省網路流量與記憶體。</span>
+          <strong data-i18n="manual_privacy_2_title">智慧資料提取 (Smart Extraction)：</strong>
+          <span data-i18n="manual_privacy_2_desc">程式僅下載網頁原始碼，不會載入任何圖片或影片，並透過演算法精準提取其中的 JSON 資料結構，將流量與記憶體消耗降至最低。</span>
         </li>
         <li>
           <strong data-i18n="manual_privacy_3_title">本地快取 (Local Cache)：</strong>
-          <span data-i18n="manual_privacy_3_desc">查詢過的名稱會儲存在您電腦的硬碟中 (預設保存 7 天)，避免重複請求。</span>
+          <span data-i18n="manual_privacy_3_desc">查詢過的名稱會儲存在您電腦的硬碟中，避免重複請求。</span>
         </li>
       </ul>
 
@@ -214,6 +264,34 @@
           <strong data-i18n="subs_potential_color">褐色：</strong> <span data-i18n="subs_potential">潛力頻道 (500+)</span>
         </li>
       </ul>
+
+      <!-- 系統保險絲章節 -->
+      <h2 data-i18n="manual_fuse_section_title">⚡ 系統保險絲機制 (System Fuse)</h2>
+      <p data-i18n="manual_fuse_intro">為了因應 YouTube 改版或無預警的介面更新，本工具內建了兩道「安全保險絲」。當系統偵測到大量的錯誤或異常行為時，會自動「熔斷」以保護您的瀏覽體驗。</p>
+
+      <div class="fuse-card">
+        <div class="fuse-icon">🖥️</div>
+        <div class="fuse-content">
+          <h4 data-i18n="manual_fuse_fe_title">前端保險絲</h4>
+          <p data-i18n="manual_fuse_fe_desc">...</p>
+        </div>
+      </div>
+
+      <div class="fuse-card">
+        <div class="fuse-icon">⚡</div>
+        <div class="fuse-content">
+          <h4 data-i18n="manual_fuse_be_title">後端保險絲</h4>
+          <p data-i18n="manual_fuse_be_desc">...</p>
+        </div>
+      </div>
+
+      <div class="fuse-card fuse-warning">
+        <div class="fuse-icon">🔴</div>
+        <div class="fuse-content">
+          <h4 data-i18n="manual_fuse_action_title">遇到熔斷該怎麼辦？</h4>
+          <p data-i18n="manual_fuse_action_desc">...</p>
+        </div>
+      </div>
 
       <!-- 新增設定說明區塊 -->
       <h3 data-i18n="manual_settings_title">⚙️ 偏好設定與效能優化</h3>

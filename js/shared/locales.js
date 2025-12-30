@@ -170,7 +170,38 @@ const I18nLocales = {
     manual_q1: "Q: 為什麼有些名字顯示虛線底線？",
     manual_a1: "A: 代表該資料是從外部匯入或已過期。只要該使用者再次發言，系統就會自動更新，請放心使用。",
     manual_q4: "Q: 出現無法還原或 [OUTPUT NOT AVAILABLE]？",
-    manual_a4: "A: 這是 YouTube 的暫時性限制（防爬蟲機制）。請休息 5 分鐘後再試，或在設定中切換為「慢速模式」。"
+    manual_a4: "A: 這是 YouTube 的暫時性限制（防爬蟲機制）。請休息 5 分鐘後再試，或在設定中切換為「慢速模式」。",
+
+    // 保險絲
+    fuse_fe_title: "前端保險絲 (介面)",
+    fuse_be_title: "後端保險絲 (爬蟲)",
+    
+    fuse_status_ok: "🟢 正常",
+    fuse_status_tripped: "🔴 已熔斷 (暫停)",
+
+    fuse_fe_desc_ok: "介面替換功能運作中。",
+    fuse_fe_desc_tripped: "偵測到 DOM 操作異常或手動暫停。已停止所有替換動作。",
+    
+    fuse_be_desc_ok: "資料抓取功能運作中。",
+    fuse_be_desc_tripped: "爬蟲異常或手動暫停。將停止網路請求，僅使用現有快取。",
+    
+    fuse_btn_reset: "重置開啟",
+    fuse_btn_stop: "手動暫停",
+    
+    fuse_reason_manual: "手動暫停",
+    fuse_reason_backend: "爬蟲失敗過多",
+    fuse_reason_frontend: "介面錯誤過多",
+    fuse_tripped_hint: "⚠️ 注意：如果反覆發生熔斷，可能代表 YouTube 已改版，請暫時保持關閉並點擊下方「🐦 回報問題」通知作者。",
+
+    // 說明書 - 系統保險絲章節
+    manual_fuse_section_title: "⚡ 系統保險絲機制 (System Fuse)",
+    manual_fuse_intro: "為了因應 YouTube 改版或無預警的介面更新，本工具內建了兩道「安全保險絲」。當系統偵測到大量的錯誤或異常行為時，會自動「熔斷」以保護您的瀏覽體驗，避免網頁卡頓或崩潰。",
+    manual_fuse_fe_title: "🖥️ 前端保險絲 (Frontend Fuse)",
+    manual_fuse_fe_desc: "負責監控「介面替換」的穩定性。如果因 YouTube 改版導致找不到元素或替換時發生大量錯誤，此保險絲會熔斷，暫停所有的畫面修改動作。此時您的 YouTube 會恢復成原本的樣子。",
+    manual_fuse_be_title: "⚡ 後端保險絲 (Backend Fuse)",
+    manual_fuse_be_desc: "負責監控「資料爬蟲」的成功率。如果連續抓取失敗（例如 YouTube 改版導致無法解析，或觸發了防爬蟲限制），此保險絲會熔斷，停止發送任何網路請求。此時系統仍會嘗試使用您硬碟中既有的快取資料。",
+    manual_fuse_action_title: "🔴 遇到熔斷該怎麼辦？",
+    manual_fuse_action_desc: "當您在擴充功能選單中看到紅色的「已熔斷」警告時，您可以嘗試點擊按鈕手動重置。如果重置後馬上又熔斷，代表問題尚未解決（通常是 YouTube 改版了），請保持關閉並等待作者發布新版本修復。",
   },
   "zh-CN": {
     app_title: "YT 昵称还原助手",
@@ -333,7 +364,33 @@ const I18nLocales = {
     manual_q1: "Q: 为什么有些名字显示虚线底线？",
     manual_a1: "A: 代表该资料是从外部导入或已过期。只要该用户再次发言，系统就会自动更新，请放心使用。",
     manual_q4: "Q: 出现无法还原或 [OUTPUT NOT AVAILABLE]？",
-    manual_a4: "A: 这是 YouTube 的暂时性限制（防爬虫机制）。请休息 5 分钟后再试，或在设置中切换为“慢速模式”。"
+    manual_a4: "A: 这是 YouTube 的暂时性限制（防爬虫机制）。请休息 5 分钟后再试，或在设置中切换为“慢速模式”。",
+
+    // 保險絲 (CN)
+    fuse_fe_title: "前端保险丝 (介面)",
+    fuse_be_title: "后端保险丝 (爬虫)",
+    fuse_status_ok: "🟢 正常",
+    fuse_status_tripped: "🔴 已熔断 (暂停)",
+    fuse_fe_desc_ok: "介面替换功能运作中。",
+    fuse_fe_desc_tripped: "侦测到 DOM 操作异常或手动暂停。已停止所有替换动作。",
+    fuse_be_desc_ok: "资料抓取功能运作中。",
+    fuse_be_desc_tripped: "爬虫异常或手动暂停。将停止网络请求，仅使用现有缓存。",
+    fuse_btn_reset: "重置开启",
+    fuse_btn_stop: "手动暂停",
+    fuse_reason_manual: "手动暂停",
+    fuse_reason_backend: "爬虫失败过多",
+    fuse_reason_frontend: "介面错误过多",
+    fuse_tripped_hint: "⚠️ 注意：如果反复发生熔断，可能代表 YouTube 已改版，请暂时保持关闭并点击下方“🐦 反馈问题”通知作者。",
+
+    // 說明書 - 系統保險絲章節
+    manual_fuse_section_title: "⚡ 系统保险丝机制 (System Fuse)",
+    manual_fuse_intro: "为了因应 YouTube 频繁的改版或无预警的介面更新，本工具内建了两道“安全保险丝”。当系统侦测到大量的错误或异常行为时，会自动“熔断”以保护您的浏览体验，避免网页卡顿或崩溃。",
+    manual_fuse_fe_title: "🖥️ 前端保险丝 (Frontend Fuse)",
+    manual_fuse_fe_desc: "负责监控“介面替换”的稳定性。如果因 YouTube 改版导致找不到元素或替换时发生大量错误，此保险丝会熔断，暂停所有的画面修改动作。此时您的 YouTube 会恢复成原本的样子。",
+    manual_fuse_be_title: "⚡ 后端保险丝 (Backend Fuse)",
+    manual_fuse_be_desc: "负责监控“资料爬虫”的成功率。如果连续抓取失败（例如 YouTube 改版导致无法解析，或触发了防爬虫限制），此保险丝会熔断，停止发送任何网络请求。此时系统仍会尝试使用您硬盘中既有的缓存资料。",
+    manual_fuse_action_title: "🔴 遇到熔断该怎么办？",
+    manual_fuse_action_desc: "当您在扩展选单中看到红色的“已熔断”警告时，您可以尝试点击按钮手动重置。如果重置后马上又熔断，代表问题尚未解决（通常是 YouTube 改版了），请保持关闭并等待作者发布新版本修复。",
   },
   "en": {
     app_title: "YT Nickname Restorer",
@@ -446,7 +503,7 @@ const I18nLocales = {
     loading: "Loading...",
     subs_count: "{count} Subscribers",
 
-    // Manual Page (New)
+    // Manual Page
     manual_settings_title: "⚙️ Preferences & Optimization",
     manual_settings_ttl: "TTL (Days): Data older than this is marked expired and queued for background refresh.",
     manual_settings_del: "Auto Delete: Data older than this is permanently removed to free up space.",
@@ -496,7 +553,33 @@ const I18nLocales = {
     manual_q1: "Q: Why do some names have a dotted underline?",
     manual_a1: "A: It means the data is imported from external sources or has expired. As soon as the user speaks again, the system will automatically update it.",
     manual_q4: "Q: Unable to restore or [OUTPUT NOT AVAILABLE] appears?",
-    manual_a4: "A: This is a temporary limitation from YouTube (anti-crawler mechanism). Please try again after 5 minutes or switch to 'Slow Mode' in settings."
+    manual_a4: "A: This is a temporary limitation from YouTube (anti-crawler mechanism). Please try again after 5 minutes or switch to 'Slow Mode' in settings.",
+
+    // 保險絲 (EN)
+    fuse_fe_title: "Frontend Fuse (UI)",
+    fuse_be_title: "Backend Fuse (Fetcher)",
+    fuse_status_ok: "🟢 Operational",
+    fuse_status_tripped: "🔴 Tripped (Paused)",
+    fuse_fe_desc_ok: "UI Replacement is active.",
+    fuse_fe_desc_tripped: "UI errors detected or manually paused. UI replacement stopped.",
+    fuse_be_desc_ok: "Data Fetching is active.",
+    fuse_be_desc_tripped: "Fetcher errors or manually paused. Network requests stopped, cache only.",
+    fuse_btn_reset: "Reset & Enable",
+    fuse_btn_stop: "Manual Stop",
+    fuse_reason_manual: "Paused by User",
+    fuse_reason_backend: "Fetch Failures",
+    fuse_reason_frontend: "UI Errors",
+    fuse_tripped_hint: "⚠️ Note: If this keeps tripping, YouTube might have changed. Please keep it off and report via '🐦 Report Issue' below.",
+
+    // Manual - Fuse Section
+    manual_fuse_section_title: "⚡ System Fuse Mechanism",
+    manual_fuse_intro: "To cope with YouTube updates or unexpected interface changes, this tool has two built-in 'Safety Fuses'. When the system detects a large number of errors or abnormal behavior, it will automatically 'trip' (pause) to protect your browsing experience and prevent the page from freezing or crashing.",
+    manual_fuse_fe_title: "🖥️ Frontend Fuse",
+    manual_fuse_fe_desc: "Monitors the stability of 'Interface Replacement'. If finding elements or replacing them causes too many errors (e.g., due to YouTube layout changes), this fuse will trip, pausing all visual modifications. Your YouTube will return to its original look.",
+    manual_fuse_be_title: "⚡ Backend Fuse",
+    manual_fuse_be_desc: "Monitors the success rate of the 'Data Scraper'. If continuous fetching failures occur (e.g., YouTube changed the data structure or blocked requests), this fuse will trip, stopping all network requests. The system will still try to use existing cached data from your disk.",
+    manual_fuse_action_title: "🔴 What if a fuse trips?",
+    manual_fuse_action_desc: "When you see a red 'Tripped' warning in the extension menu, you can try clicking the button to manually reset it. If it trips again immediately, the issue is likely unresolved (usually a YouTube update). Please keep it off and wait for the author to release a new version.",
   },
   "ja": {
     app_title: "YT ニックネーム復元アシスタント",
@@ -659,6 +742,32 @@ const I18nLocales = {
     manual_q1: "Q: なぜ一部の名前に点線の下線が表示されるのですか？",
     manual_a1: "A: そのデータが外部からインポートされたか、期限切れであることを示しています。そのユーザーが再度発言すると、システムが自動的に更新しますので、安心してご利用ください。",
     manual_q4: "Q: 復元できない、または [OUTPUT NOT AVAILABLE] と表示される？",
-    manual_a4: "A: これは YouTube の一時的な制限（クローラー対策）です。5分ほど待ってから再試行するか、設定で「低速モード」に切り替えてください。"
+    manual_a4: "A: これは YouTube の一時的な制限（クローラー対策）です。5分ほど待ってから再試行するか、設定で「低速モード」に切り替えてください。",
+
+    // 保險絲 (JA)
+    fuse_fe_title: "フロントエンド・ヒューズ (UI)",
+    fuse_be_title: "バックエンド・ヒューズ (Crawler)",
+    fuse_status_ok: "🟢 正常",
+    fuse_status_tripped: "🔴 遮断中 (停止)",
+    fuse_fe_desc_ok: "UI置換機能が動作中です。",
+    fuse_fe_desc_tripped: "UIエラー検出または手動停止。置換を停止しました。",
+    fuse_be_desc_ok: "データ取得機能が動作中です。",
+    fuse_be_desc_tripped: "取得エラーまたは手動停止。通信を停止し、キャッシュのみ使用します。",
+    fuse_btn_reset: "リセットして再開",
+    fuse_btn_stop: "手動停止",
+    fuse_reason_manual: "手動停止",
+    fuse_reason_backend: "取得エラー多発",
+    fuse_reason_frontend: "UIエラー多発",
+    fuse_tripped_hint: "⚠️ 注意: 頻繁にヒューズが作動する場合は、YouTube の仕様変更の可能性があります。一時的にオフにして、下部の「🐦 問題を報告」から作者にお知らせください。",
+
+    // Manual - Fuse Section (JA)
+    manual_fuse_section_title: "⚡ システムヒューズ機構 (System Fuse)",
+    manual_fuse_intro: "YouTube の仕様変更や予期しないインターフェースの更新に対応するため、本ツールには2つの「安全ヒューズ」が組み込まれています。システムが大量のエラーや異常な動作を検出すると、自動的に「遮断」し、閲覧体験を保護してページのフリーズやクラッシュを防ぎます。",
+    manual_fuse_fe_title: "🖥️ フロントエンド・ヒューズ (Frontend Fuse)",
+    manual_fuse_fe_desc: "「UI置換」の安定性を監視します。YouTube の仕様変更により要素が見つからない、または置換時に大量のエラーが発生した場合、このヒューズが作動し、すべての画面変更動作を一時停止します。このとき、YouTube は元の表示に戻ります。",
+    manual_fuse_be_title: "⚡ バックエンド・ヒューズ (Backend Fuse)",
+    manual_fuse_be_desc: "「データ取得クローラー」の成功率を監視します。連続して取得に失敗した場合（例：YouTube の仕様変更で解析できない、またはアクセス制限がかかった場合）、このヒューズが作動し、すべてのネットワーク要求を停止します。このとき、システムはHDD内の既存のキャッシュデータを使用しようとします。",
+    manual_fuse_action_title: "🔴 ヒューズが作動したら？",
+    manual_fuse_action_desc: "拡張機能のメニューに赤い「遮断中」の警告が表示された場合、ボタンをクリックして手動でリセットできます。リセット後すぐにまた遮断される場合は、問題が解決していない（通常は YouTube の仕様変更）可能性があります。オフのままにして、作者による新バージョンのリリースをお待ちください。",
   }
 };

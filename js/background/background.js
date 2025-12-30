@@ -16,6 +16,27 @@ try {
   console.error("[Background] Script Import Error:", e);
 }
 
+// === 版本更新時自動重置保險絲 ===
+// 當擴充功能更新 (Update) 時，假設問題已修復，自動將保險絲重置為 NORMAL
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "update") {
+    const { FUSE_FE_KEY, FUSE_BE_KEY } = AppConfig;
+    const resetState = { status: "NORMAL", reason: null, timestamp: Date.now() };
+
+    chrome.storage.local.set(
+      {
+        [FUSE_FE_KEY]: resetState,
+        [FUSE_BE_KEY]: resetState,
+      },
+      () => {
+        console.log(
+          `[Background] Extension updated to v${chrome.runtime.getManifest().version}. Fuses have been reset.`
+        );
+      }
+    );
+  }
+});
+
 // 2. 監聽訊息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // === 快取查詢 (Async) ===

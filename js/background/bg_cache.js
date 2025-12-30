@@ -22,6 +22,8 @@ const BgCache = {
 
   // === 設定同步與自動清理 ===
   syncSettingsAndPrune: function () {
+    // 檢查 AppConfig 是否存在，避免在某些環境報錯
+    if (typeof AppConfig === "undefined") return;
     const { SETTINGS_KEY, DEFAULT_DELETE_DAYS } = AppConfig;
 
     chrome.storage.local.get(SETTINGS_KEY, async (res) => {
@@ -85,6 +87,12 @@ const BgCache = {
   // === V1 資料遷移邏輯 ===
   tryMigrateFromV1: function () {
     return new Promise((resolve) => {
+      // 檢查 AppConfig 是否存在
+      if (typeof AppConfig === "undefined") {
+        resolve();
+        return;
+      }
+      
       const legacyKey = AppConfig.CACHE_KEY;
       chrome.storage.local.get(legacyKey, async (res) => {
         const oldData = res[legacyKey];
@@ -137,7 +145,14 @@ const BgCache = {
 
     // 1. 查記憶體
     if (this.memoryCache.has(handle)) {
-      return this.memoryCache.get(handle);
+      const data = this.memoryCache.get(handle);
+      
+      // 先刪除，再重新加入
+      // 這會讓這個 handle 從 Map 的原本位置移到「最後面」(變成最新)
+      this.memoryCache.delete(handle);
+      this.memoryCache.set(handle, data);
+      
+      return data;
     }
 
     // 2. 查緩衝區
@@ -221,10 +236,17 @@ const BgCache = {
   },
 
   setMemory: function (handle, item) {
-    if (this.memoryCache.size >= this.MAX_MEM_SIZE) {
+    // 1. 如果已經存在，先刪除 (為了更新順序，也避免佔用 size 計算)
+    if (this.memoryCache.has(handle)) {
+      this.memoryCache.delete(handle);
+    }
+    // 2. 如果不存在且滿了，才踢掉最舊的
+    else if (this.memoryCache.size >= this.MAX_MEM_SIZE) {
       const firstKey = this.memoryCache.keys().next().value;
       this.memoryCache.delete(firstKey);
     }
+    
+    // 3. 寫入 (變成最新)
     this.memoryCache.set(handle, item);
   },
 
@@ -234,13 +256,28 @@ const BgCache = {
     await idbKeyval.del(handle);
   },
 
+  // 確保記憶體與硬碟皆被清空
   clear: async function () {
+    // 1. 清空記憶體
     this.memoryCache.clear();
+    
+    // 2. 清空待寫入緩衝區
     this.pendingWrites.clear();
-    await idbKeyval.clear();
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+
+    // 3. 清空硬碟
+    try {
+      await idbKeyval.clear();
+      if (typeof Logger !== "undefined") Logger.info("[BgCache] Database (Memory + IDB) cleared.");
+    } catch (err) {
+      console.error("[BgCache] Clear Failed:", err);
+    }
   },
 
-  // === 僅作廢記憶體快取 (用於 Manager 同步) ===
+  // === 作廢記憶體快取 (用於 Manager 同步) ===
   invalidateMemory: function (handles) {
     if (!handles) return;
     const list = Array.isArray(handles) ? handles : [handles];

@@ -12,6 +12,10 @@ class PageScanner {
     this.mutationQueue = new Set();
     this.mutationTimer = null;
     this.BATCH_DELAY = 50;
+    
+    // 前端保險絲狀態
+    this.fuseFrontendStatus = "NORMAL";
+    this.frontendErrorCount = 0; // 前端 DOM 操作錯誤計數
 
     this.maxLength = window.AppConfig?.DEFAULT_MAX_LENGTH || 20;
 
@@ -139,10 +143,17 @@ class PageScanner {
   init() {
     if (window === window.top || location.pathname.includes("live_chat")) {
       I18n.init().then(() => {
-        this.loadConfig();
-        this.triggerBurstReset();
-        this.startObservation();
-        this.setupUrlListener();
+        // 改為非同步等待設定載入完成
+        this.loadConfig().then(() => {
+          this.triggerBurstReset();
+          // 確保在設定載入完成後，且保險絲正常才啟動
+          if (this.fuseFrontendStatus === "NORMAL") {
+            this.startObservation();
+          } else {
+            if (typeof Logger !== "undefined") Logger.info("[Scanner] 初始化時偵測到前端保險絲熔斷，跳過掃描。");
+          }
+          this.setupUrlListener();
+        });
       });
     }
   }
@@ -155,36 +166,72 @@ class PageScanner {
   }
 
   loadConfig() {
-    if (!chrome || !chrome.storage || !chrome.storage.local) return;
-    const { SETTINGS_KEY, CLICK_TO_COPY_KEY, FETCH_SPEED_KEY } =
-      window.AppConfig;
-    chrome.storage.local.get([SETTINGS_KEY, CLICK_TO_COPY_KEY], (res) => {
-      const settings = res[SETTINGS_KEY];
-      if (settings && settings.maxLength) {
-        this.maxLength = parseInt(settings.maxLength, 10);
+    return new Promise((resolve) => {
+      if (!chrome || !chrome.storage || !chrome.storage.local) {
+         resolve();
+         return;
       }
-      TooltipManager.setCopyEnabled(res[CLICK_TO_COPY_KEY] === true);
-    });
+      const { SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY } = window.AppConfig;
 
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local") {
-        if (changes[SETTINGS_KEY] && changes[SETTINGS_KEY].newValue.maxLength) {
-          this.maxLength = parseInt(
-            changes[SETTINGS_KEY].newValue.maxLength,
-            10
-          );
+      chrome.storage.local.get(
+        [SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY],
+        (res) => {
+          // 載入基本設定
+          const settings = res[SETTINGS_KEY];
+          if (settings && settings.maxLength) {
+            this.maxLength = parseInt(settings.maxLength, 10);
+          }
+          TooltipManager.setCopyEnabled(res[CLICK_TO_COPY_KEY] === true);
+
+          // 載入前端保險絲狀態
+          if (res[FUSE_FE_KEY]) {
+            this.fuseFrontendStatus = res[FUSE_FE_KEY].status;
+          }
+          
+          resolve(); // 完成載入
         }
-        if (changes[CLICK_TO_COPY_KEY]) {
-          TooltipManager.setCopyEnabled(
-            changes[CLICK_TO_COPY_KEY].newValue === true
-          );
+      );
+
+      // 監聽器只需綁定一次，不影響初始化 Promise
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local") {
+          if (changes[SETTINGS_KEY] && changes[SETTINGS_KEY].newValue.maxLength) {
+            this.maxLength = parseInt(
+              changes[SETTINGS_KEY].newValue.maxLength,
+              10
+            );
+          }
+          if (changes[CLICK_TO_COPY_KEY]) {
+            TooltipManager.setCopyEnabled(
+              changes[CLICK_TO_COPY_KEY].newValue === true
+            );
+          }
+          // [新增] 監聽前端保險絲變化
+          if (changes[FUSE_FE_KEY]) {
+            this.fuseFrontendStatus = changes[FUSE_FE_KEY].newValue.status;
+            this.checkFuseState();
+          }
         }
-      }
+      });
     });
   }
 
+  // 檢查並執行前端保險絲動作
+  checkFuseState() {
+    if (this.fuseFrontendStatus === "TRIPPED") {
+      this.stopObservation();
+      if (typeof Logger !== "undefined")
+        Logger.red("[Scanner] 前端保險絲已熔斷，停止 UI 渲染。");
+    } else {
+      // 重置錯誤計數並重啟
+      this.frontendErrorCount = 0;
+      this.startObservation();
+    }
+  }
+
   startObservation() {
-    if (this.isScanning) return;
+    // 檢查前端保險絲
+    if (this.isScanning || this.fuseFrontendStatus === "TRIPPED") return;
     this.isScanning = true;
 
     if (typeof Logger !== "undefined") {
@@ -204,7 +251,20 @@ class PageScanner {
     });
   }
 
+  stopObservation() {
+    if (!this.isScanning) return;
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+    this.isScanning = false;
+    // 清空佇列以防殘留任務
+    this.mutationQueue.clear();
+  }
+
   handleMutations(mutations) {
+    if (this.fuseFrontendStatus === "TRIPPED") return;
+
     let hasUpdates = false;
     for (const m of mutations) {
       if (m.type === "childList" && m.addedNodes.length > 0) {
@@ -249,6 +309,12 @@ class PageScanner {
   }
 
   processMutationQueue() {
+    // 如果保險絲已經熔斷，就不處理佇列
+    if (this.fuseFrontendStatus === "TRIPPED") {
+        this.mutationQueue.clear();
+        return;
+    }
+
     if (this.mutationQueue.size === 0) return;
     const nodesToProcess = Array.from(this.mutationQueue);
     this.mutationQueue.clear();
@@ -258,7 +324,8 @@ class PageScanner {
   }
 
   scanDeep(root) {
-    if (!root) return;
+    // 深層掃描也檢查保險絲，因為 scanDeep 可能被非同步呼叫
+    if (!root || this.fuseFrontendStatus === "TRIPPED") return;
 
     // 處理當前 Root 下的一般元素 (Light DOM)
     if (root.querySelectorAll) {
@@ -284,46 +351,75 @@ class PageScanner {
   }
 
   processNode(el) {
-    const config = this.targetConfigs.find((c) => el.matches(c.sel));
-    if (!config) return;
+    // 如果前端保險絲熔斷，直接不處理任何節點
+    if (this.fuseFrontendStatus === "TRIPPED") return;
 
-    const rawText = (el.textContent || "").trim();
-    const mode = config.mode;
-    el.dataset.rnMode = mode;
+    try {
+        const config = this.targetConfigs.find((c) => el.matches(c.sel));
+        if (!config) return;
 
-    let handle = null;
+        const rawText = (el.textContent || "").trim();
+        const mode = config.mode;
+        el.dataset.rnMode = mode;
 
-    if (mode === this.MODE.EMBEDDED) {
-      const match = rawText.match(/(@[\w\-\.]+)/);
-      if (match) handle = match[1];
-    } else if (mode === this.MODE.WRAPPER) {
-      const match = rawText.match(/^(@[^ ]+)/);
-      if (match) handle = match[1];
-    } else {
-      if (this.isHandle(rawText)) handle = rawText;
+        let handle = null;
+
+        if (mode === this.MODE.EMBEDDED) {
+          const match = rawText.match(/(@[\w\-\.]+)/);
+          if (match) handle = match[1];
+        } else if (mode === this.MODE.WRAPPER) {
+          const match = rawText.match(/^(@[^ ]+)/);
+          if (match) handle = match[1];
+        } else {
+          if (this.isHandle(rawText)) handle = rawText;
+        }
+
+        if (handle) {
+          if (handle.length <= 1) return;
+          if (el.dataset.rnReplaced === "yes") {
+            if (
+              el.dataset.rnExpired !== "true" &&
+              el.dataset.rnTargetHandle === handle
+            ) {
+              return;
+            }
+            if (
+              el.dataset.rnFetching === "true" &&
+              el.dataset.rnTargetHandle === handle
+            ) {
+              return;
+            }
+          }
+          this.updateElement(handle, el);
+        } else {
+          if (mode === this.MODE.STANDARD && !el.dataset.rnReplaced) {
+            TooltipManager.attachData(el, null, rawText);
+          }
+        }
+    } catch (err) {
+        // 前端異常偵測
+        this.reportFrontendError();
     }
-
-    if (handle) {
-      if (handle.length <= 1) return;
-      if (el.dataset.rnReplaced === "yes") {
-        if (
-          el.dataset.rnExpired !== "true" &&
-          el.dataset.rnTargetHandle === handle
-        ) {
-          return;
-        }
-        if (
-          el.dataset.rnFetching === "true" &&
-          el.dataset.rnTargetHandle === handle
-        ) {
-          return;
-        }
-      }
-      this.updateElement(handle, el);
-    } else {
-      if (mode === this.MODE.STANDARD && !el.dataset.rnReplaced) {
-        TooltipManager.attachData(el, null, rawText);
-      }
+  }
+  
+  // 前端錯誤回報與熔斷
+  reportFrontendError() {
+    this.frontendErrorCount++;
+    const threshold = window.AppConfig.FUSE_CONFIG.FRONTEND_ERROR_THRESHOLD || 20;
+    
+    if (this.frontendErrorCount >= threshold) {
+        if (typeof Logger !== "undefined") Logger.red(`[FUSE] 前端 DOM 操作錯誤過多 (${this.frontendErrorCount})，觸發前端熔斷。`);
+        
+        // 寫入 Storage 觸發前端熔斷
+        chrome.storage.local.set({ 
+            [window.AppConfig.FUSE_FE_KEY]: {
+                status: "TRIPPED",
+                reason: "frontend",
+                timestamp: Date.now()
+            }
+        });
+        
+        this.stopObservation();
     }
   }
 
@@ -333,6 +429,9 @@ class PageScanner {
 
 // === 使用 DataBridge 更新元素 ===
   updateElement(handle, element) {
+    // 如果前端保險絲熔斷，這裡也不該發送請求或進行更新
+    if (this.fuseFrontendStatus === "TRIPPED") return;
+
     if (handle.includes("\n")) handle = handle.split("\n")[0].trim();
 
     // 標記目標，防止非同步回來後元素已被重複使用
@@ -341,31 +440,42 @@ class PageScanner {
 
     // 呼叫 DataBridge
     DataBridge.getData(handle, (data) => {
-      // 1. 基礎檢查：元素是否還在？目標Handle是否沒變？(防止非同步後的錯置)
-      if (!element.isConnected || element.dataset.rnTargetHandle !== handle) {
-        return;
-      }
+      try {
+        // 即使資料回來了，渲染前最後一次檢查保險絲
+        if (this.fuseFrontendStatus === "TRIPPED") {
+            delete element.dataset.rnFetching; // 雖然不渲染，但移除標記以免卡住
+            return;
+        }
 
-      // 2. 失敗處理：若 data 為 null，代表抓取失敗
-      // 必須移除 Fetching 標記，這樣下次捲動或刷新時才有機會重試
-      if (!data) {
-        delete element.dataset.rnFetching;
-        return;
-      }
+        // 1. 基礎檢查：元素是否還在？目標Handle是否沒變？(防止非同步後的錯置)
+        if (!element.isConnected || element.dataset.rnTargetHandle !== handle) {
+          return;
+        }
 
-      // 3. 成功處理：
-      // 若資料有效 (未過期)，則移除 Fetching 標記 (視為任務完成)
-      // (若資料過期，Fetching 標記保留，因為 DataBridge 還會觸發第二次回調)
-      if (!data.isExpired) {
-        delete element.dataset.rnFetching;
-      }
+        // 2. 失敗處理
+        if (!data) {
+          delete element.dataset.rnFetching;
+          return;
+        }
 
-      // 4. 執行渲染
-      this.applyUpdate(element, handle, data);
+        // 3. 成功處理
+        if (!data.isExpired) {
+          delete element.dataset.rnFetching;
+        }
+
+        // 4. 執行渲染
+        this.applyUpdate(element, handle, data);
+
+      } catch (e) {
+          this.reportFrontendError(); // 渲染過程出錯也算
+      }
     });
   }
 
   applyUpdate(el, handle, data) {
+    // [雙重保險] 渲染函式內部也檢查
+    if (this.fuseFrontendStatus === "TRIPPED") return;
+
     let displayName = data.name;
     const fullName = data.name;
 
@@ -425,7 +535,10 @@ class PageScanner {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         this.triggerBurstReset();
-        setTimeout(() => this.scanDeep(document.body), 1500);
+        // 只有前端保險絲未熔斷時才重新掃描
+        if (this.fuseFrontendStatus === "NORMAL") {
+            setTimeout(() => this.scanDeep(document.body), 1500);
+        }
       }
     }, 500);
   }

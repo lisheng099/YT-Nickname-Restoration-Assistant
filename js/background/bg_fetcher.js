@@ -7,21 +7,43 @@ const BgFetcher = {
   isProcessing: false,
   lastFetchTime: 0,
   activeTasks: new Map(), // 正在進行中的網路請求 { handle: [resolveFns...] }
-  errorCount: 0,
-  isCircuitOpen: false,
+  
+  // 錯誤計數器 (用於觸發後端熔斷)
+  consecutiveErrors: 0,
+  
+  // 保險絲狀態 (從 Storage 同步) - 僅關注後端
+  fuseBackend: { status: "NORMAL", reason: null },
+
+  // 測試用模擬開關
+  // 使用方式：在背景頁面的 Console 輸入 BgFetcher.SIMULATE_ERROR = 'PARSE'
+  SIMULATE_ERROR: null, // 可選值: null (正常), 'NETWORK' (網路錯誤), 'PARSE' (解析失敗)
+
   DELAY: { MIN: 1500, MAX: 3000 },
-  CIRCUIT: { THRESHOLD: 3, DURATION: 300000 },
+  
   tabQuotas: new Map(),
   initialPollQuota: 20,
   INITIAL_POLL_DELAY: { MIN: 100, MAX: 300 },
 
   init: function () {
-    chrome.storage.local.get(AppConfig.FETCH_SPEED_KEY, (res) => {
+    chrome.storage.local.get([AppConfig.FETCH_SPEED_KEY, AppConfig.FUSE_BE_KEY], (res) => {
       this.updateSpeedMode(res[AppConfig.FETCH_SPEED_KEY]);
+      
+      // 初始化後端保險絲狀態
+      if (res[AppConfig.FUSE_BE_KEY]) {
+        this.fuseBackend = res[AppConfig.FUSE_BE_KEY];
+      }
     });
+
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && changes[AppConfig.FETCH_SPEED_KEY]) {
-        this.updateSpeedMode(changes[AppConfig.FETCH_SPEED_KEY].newValue);
+      if (area === "local") {
+        if (changes[AppConfig.FETCH_SPEED_KEY]) {
+          this.updateSpeedMode(changes[AppConfig.FETCH_SPEED_KEY].newValue);
+        }
+        // 監聽後端保險絲狀態變更
+        if (changes[AppConfig.FUSE_BE_KEY]) {
+          this.fuseBackend = changes[AppConfig.FUSE_BE_KEY].newValue;
+          Logger.info(`[BgFetcher] 後端保險絲狀態更新: ${this.fuseBackend.status}`);
+        }
       }
     });
   },
@@ -55,6 +77,13 @@ const BgFetcher = {
     tabId = null
   ) {
     return new Promise((resolve) => {
+      // 檢查後端保險絲狀態
+      // 如果後端熔斷，直接回傳特殊錯誤代碼，不進入佇列
+      if (this.fuseBackend.status === "TRIPPED") {
+        resolve({ error: "Fuse Tripped", status: 503 });
+        return;
+      }
+
       if (tabId && !this.tabQuotas.has(tabId)) {
         this.tabQuotas.set(tabId, this.initialPollQuota);
       }
@@ -114,13 +143,15 @@ const BgFetcher = {
   },
 
   processQueue: async function () {
-    if (this.isProcessing || this.isCircuitOpen) return;
+    // 增加後端保險絲狀態檢查
+    if (this.isProcessing || this.fuseBackend.status === "TRIPPED") return;
     if (this.queue.high.length === 0 && this.queue.low.length === 0) return;
 
     this.isProcessing = true;
 
     while (this.queue.high.length > 0 || this.queue.low.length > 0) {
-      if (this.isCircuitOpen) break;
+      // 增加後端保險絲狀態檢查
+      if (this.fuseBackend.status === "TRIPPED") break;
 
       const nextTask =
         this.queue.high.length > 0 ? this.queue.high[0] : this.queue.low[0];
@@ -131,10 +162,11 @@ const BgFetcher = {
       let minDelay = this.DELAY.MIN;
       let maxDelay = this.DELAY.MAX;
 
+      // 如果有額度且沒有後端連續錯誤，則允許加速
       if (
         currentTabId &&
         this.tabQuotas.get(currentTabId) > 0 &&
-        this.errorCount === 0
+        this.consecutiveErrors === 0
       ) {
         isBurst = true;
         minDelay = this.INITIAL_POLL_DELAY.MIN;
@@ -177,7 +209,9 @@ const BgFetcher = {
 
           // 寫入 Cache
           BgCache.set(handle, { name: result.nameRaw, subs: result.subs });
-          this.errorCount = 0;
+          
+          // 成功時重置錯誤計數
+          this.consecutiveErrors = 0;
 
           if (isBurst && currentTabId) {
             const left = this.tabQuotas.get(currentTabId) - 1;
@@ -187,6 +221,10 @@ const BgFetcher = {
           }
         } else {
           Logger.orange(`[Fetch Fail] ${handle}: ${result.error}`);
+          // 如果是資料找不到 (可能YT改版)，檢查健康度
+          if (result.error === "Name not found") {
+             this.checkBackendHealth();
+          }
         }
 
         const waiters = this.activeTasks.get(handle) || [];
@@ -204,6 +242,25 @@ const BgFetcher = {
   },
 
   doNetworkFetch: async function (handle) {
+    // === 模擬測試區塊 ===
+    if (this.SIMULATE_ERROR) {
+       Logger.orange(`[Debug] 模擬故障模式啟動: ${this.SIMULATE_ERROR}`);
+       
+       // 模擬 1: 網路層級錯誤 (如 429 Too Many Requests)
+       if (this.SIMULATE_ERROR === "NETWORK") {
+           this.consecutiveErrors++;
+           this.checkBackendHealth();
+           return { error: "Simulated Network Error (429)", status: 429 };
+       }
+       
+       // 模擬 2: 解析層級錯誤 (YT 改版導致抓不到 Name)
+       if (this.SIMULATE_ERROR === "PARSE") {
+           // 回傳 "Name not found" 會讓 processQueue 去呼叫 checkBackendHealth
+           return { error: "Name not found" }; 
+       }
+    }
+    // =========================
+
     if (!handle) return { error: "Invalid handle" };
     const cleanHandle = handle.replace(/^@/, "");
     const targetUrl = `https://www.youtube.com/@${encodeURIComponent(
@@ -223,7 +280,9 @@ const BgFetcher = {
       clearTimeout(timeoutId);
 
       if (response.status === 429) {
-        this.triggerCircuitBreaker();
+        // 429 錯誤也納入計數
+        this.consecutiveErrors++;
+        this.checkBackendHealth();
         return { error: "Too Many Requests", status: 429 };
       }
 
@@ -241,6 +300,8 @@ const BgFetcher = {
 
       if (parsed)
         return { success: true, nameRaw: parsed.nameRaw, subs: parsed.subs };
+      
+      // 解析失敗 (抓不到資料)
       return { error: "Name not found" };
     } catch (err) {
       clearTimeout(timeoutId);
@@ -248,22 +309,35 @@ const BgFetcher = {
     }
   },
 
-  triggerCircuitBreaker: function () {
-    this.errorCount++;
-    if (this.errorCount >= this.CIRCUIT.THRESHOLD) {
-      this.isCircuitOpen = true;
-      Logger.red(
-        `[Circuit Breaker] 熔斷啟動！暫停抓取 ${
-          this.CIRCUIT.DURATION / 1000
-        } 秒`
-      );
-      setTimeout(() => {
-        this.isCircuitOpen = false;
-        this.errorCount = 0;
-        this.processQueue();
-      }, this.CIRCUIT.DURATION);
+  // 檢查後端健康狀態
+  checkBackendHealth: function () {
+    this.consecutiveErrors++;
+    const threshold = AppConfig.FUSE_CONFIG.BACKEND_ERROR_THRESHOLD || 10;
+    Logger.orange(`[Health] 連續錯誤: ${this.consecutiveErrors}/${threshold}`);
+    
+    if (this.consecutiveErrors >= threshold) {
+      this.tripFuse("backend");
     }
   },
+
+  // 觸發後端熔斷
+  tripFuse: function (reasonType) {
+    Logger.red(`[FUSE] 後端保險絲熔斷啟動！原因: ${reasonType}`);
+    const newState = {
+      status: "TRIPPED",
+      reason: reasonType,
+      timestamp: Date.now()
+    };
+    
+    // 寫入 Storage (僅更新後端保險絲 Key)
+    chrome.storage.local.set({ [AppConfig.FUSE_BE_KEY]: newState });
+    
+    // 清空當前佇列
+    this.queue.high = [];
+    this.queue.low = [];
+    this.activeTasks.clear();
+  },
+
   resetQuota: function (tabId) {
     if (tabId) this.tabQuotas.set(tabId, this.initialPollQuota);
   },

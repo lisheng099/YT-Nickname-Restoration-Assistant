@@ -22,6 +22,11 @@ globalScope.AppConfig = {
   // 語言設定鍵值
   LANG_KEY: "yt_realname_lang",
 
+  // 拆分為兩個獨立的保險絲 Key，避免狀態寫入時發生 Race Condition
+  // 儲存格式: { status: 'NORMAL' | 'TRIPPED', reason: string, timestamp: number }
+  FUSE_FE_KEY: "yt_realname_fuse_frontend", // 前端保險絲 (控制 Scanner)
+  FUSE_BE_KEY: "yt_realname_fuse_backend",  // 後端保險絲 (控制 Fetcher)
+
   // === 預設參數設定 ===
   // 名稱顯示的最大長度
   DEFAULT_MAX_LENGTH: 20,
@@ -38,6 +43,17 @@ globalScope.AppConfig = {
   // true: 開啟詳細日誌 (Console Log)，便於開發除錯。
   // false: 關閉日誌，適用於正式發布版本，保持 Console 乾淨。
   DEBUG_MODE: false,
+
+  // 保險絲閥值設定
+  FUSE_CONFIG: {
+    // 後端連續錯誤次數閥值 (超過此數字觸發後端熔斷)
+    // 定義：抓不到資料、解析失敗、429 等
+    BACKEND_ERROR_THRESHOLD: 10,
+    
+    // 前端 DOM 操作連續錯誤閥值 (超過此數字觸發前端熔斷)
+    // 定義：找不到預期元素導致報錯、插入失敗等
+    FRONTEND_ERROR_THRESHOLD: 20,
+  },
 
   // 抓取速度控制 (Rate Limiting)
   // 用途：設定每次爬蟲抓取後的延遲時間範圍（毫秒），以降低被 YouTube 偵測為機器人的風險。
