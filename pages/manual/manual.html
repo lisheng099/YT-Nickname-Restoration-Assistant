@@ -2,7 +2,7 @@
 <html lang="zh-TW">
   <head>
     <meta charset="utf-8" />
-    <title>YT 暱稱還原助手 - 使用說明與關於</title>
+    <title data-i18n="manual_page_title">YT 暱稱還原助手 - 使用說明與關於</title>
     <style>
       body {
         margin: 0;
@@ -151,133 +151,148 @@
   </head>
   <body>
     <div class="container">
-      <h1>📺 YT 暱稱還原助手 <span class="tag" id="manualVersion"></span></h1>
+      <h1><span data-i18n="app_title">📺 YT 暱稱還原助手</span> <span class="tag" id="manualVersion"></span></h1>
 
       <div class="intro-card">
-        <strong>📖 簡介</strong><br />
+        <strong data-i18n="manual_intro_title">📖 簡介</strong><br />
+        <span data-i18n="manual_intro_desc">
         YT 暱稱還原助手 是一款專為 YouTube 觀眾設計的瀏覽器擴充功能。為了解決
         YouTube 將使用者 ID 改為難以辨識的 Handle（如
-        <code>@User-xk9lp...</code
-        >）的問題，本工具能在聊天室與留言區自動將這些代碼「還原」為使用者真實設定的頻道顯示名稱。
+        <code>@User-xk9lp...</code>）的問題，本工具能在聊天室與留言區自動將這些代碼「還原」為使用者真實設定的頻道顯示名稱。
+        </span>
       </div>
 
-      <h2>🛡️ 隱私與技術原理</h2>
-      <p>
+      <h2 data-i18n="manual_privacy_title">🛡️ 隱私與技術原理</h2>
+      <p data-i18n="manual_privacy_desc">
         本工具堅持
-        <strong>「本地運作、隱私優先」</strong
-        >，所有查詢動作皆由您的瀏覽器直接發送至
+        <strong>「本地運作、隱私優先」</strong>，所有查詢動作皆由您的瀏覽器直接發送至
         YouTube，確保您的瀏覽隱私絕對安全。
       </p>
       <ul>
         <li>
-          <strong>本地爬蟲技術：</strong> 當擴充功能發現未知的
-          <code>@ID</code> 時，會在背景對 YouTube 官方頻道頁面發出請求。
+          <strong data-i18n="manual_privacy_1_title">本地爬蟲技術：</strong> 
+          <span data-i18n="manual_privacy_1_desc">當擴充功能發現未知的 <code>@ID</code> 時，會在背景對 YouTube 官方頻道頁面發出請求。</span>
         </li>
         <li>
-          <strong>串流讀取優化 (Stream Parsing)：</strong>
-          程式碼採用智慧串流技術，只要讀取到需要的名稱資料，就會立即切斷連線，大幅節省網路流量與記憶體。
+          <strong data-i18n="manual_privacy_2_title">串流讀取優化 (Stream Parsing)：</strong>
+          <span data-i18n="manual_privacy_2_desc">程式碼採用智慧串流技術，只要讀取到需要的名稱資料，就會立即切斷連線，大幅節省網路流量與記憶體。</span>
         </li>
         <li>
-          <strong>本地快取 (Local Cache)：</strong>
-          查詢過的名稱會儲存在您電腦的硬碟中 (預設保存 7 天)，避免重複請求。
+          <strong data-i18n="manual_privacy_3_title">本地快取 (Local Cache)：</strong>
+          <span data-i18n="manual_privacy_3_desc">查詢過的名稱會儲存在您電腦的硬碟中 (預設保存 7 天)，避免重複請求。</span>
         </li>
       </ul>
 
       <div class="tech-box">
-        <strong>⚠️ 注意事項：</strong><br />此工具依賴 YouTube
-        網頁結構運作，若官方改版可能會導致暫時失效。
+        <strong data-i18n="manual_notice_title">⚠️ 注意事項：</strong><br />
+        <span data-i18n="manual_notice_desc">此工具依賴 YouTube 網頁結構運作，若官方改版可能會導致暫時失效。</span>
       </div>
 
-      <h2>🚀 主要功能與圖示說明</h2>
-      <h3>智慧資訊卡 (Tooltip)</h3>
-      <p>滑鼠懸停在還原後的名稱上，可查看詳細資訊與訂閱數等級：</p>
+      <h2 data-i18n="manual_features_title">🚀 主要功能與圖示說明</h2>
+      
+      <h3 data-i18n="manual_tooltip_title">智慧資訊卡 (Tooltip)</h3>
+      <p data-i18n="manual_tooltip_desc">滑鼠懸停在還原後的名稱上，可查看詳細資訊與訂閱數等級：</p>
       <ul style="list-style: none; padding-left: 10px">
         <li>
-          <span class="dot" style="background: #00bfa5"></span
-          ><strong>青色：</strong> 百萬訂閱 (1M+)
+          <span class="dot" style="background: #00bfa5"></span>
+          <strong data-i18n="subs_million_color">青色：</strong> <span data-i18n="subs_million">百萬訂閱 (1M+)</span>
         </li>
         <li>
-          <span class="dot" style="background: #ffd700"></span
-          ><strong>金色：</strong> 十萬訂閱 (100k+)
+          <span class="dot" style="background: #ffd700"></span>
+          <strong data-i18n="subs_100k_color">金色：</strong> <span data-i18n="subs_100k">十萬訂閱 (100k+)</span>
         </li>
         <li>
-          <span class="dot" style="background: #c0c0c0"></span
-          ><strong>銀色：</strong> 萬人訂閱 (10k+)
+          <span class="dot" style="background: #c0c0c0"></span>
+          <strong data-i18n="subs_10k_color">銀色：</strong> <span data-i18n="subs_10k">萬人訂閱 (10k+)</span>
         </li>
         <li>
-          <span class="dot" style="background: #cd7f32"></span
-          ><strong>銅色：</strong> 千人訂閱 (1k+)
+          <span class="dot" style="background: #cd7f32"></span>
+          <strong data-i18n="subs_1000_color">銅色：</strong> <span data-i18n="subs_1000">1000人訂閱 (1000+)</span>
         </li>
         <li>
-          <span class="dot" style="background: #8d6e63"></span
-          ><strong>褐色：</strong> 潛力頻道 (&lt;1k)
+          <span class="dot" style="background: #8d6e63"></span>
+          <strong data-i18n="subs_potential_color">褐色：</strong> <span data-i18n="subs_potential">潛力頻道 (500+)</span>
         </li>
       </ul>
 
-      <h2>🔗 社群分享與協作應用</h2>
+      <!-- 新增設定說明區塊 -->
+      <h3 data-i18n="manual_settings_title">⚙️ 偏好設定與效能優化</h3>
+      <ul style="list-style-type: disc; padding-left: 20px;">
+        <li data-i18n="manual_settings_ttl">過期時間 (TTL)：資料超過此天數後會標記為過期，下次遇到時會嘗試背景更新。</li>
+        <li data-i18n="manual_settings_del">自動刪除：資料超過此天數後會從硬碟永久移除，釋放空間。</li>
+        <li data-i18n="manual_settings_speed">抓取頻率：提供「普通」與「慢速」模式。若遇到 YouTube 限制，可切換至慢速模式。</li>
+      </ul>
+
+      <!-- 新增指定抓取說明區塊 -->
+      <h3 data-i18n="manual_force_title">🧪 指定重新抓取 (實驗室)</h3>
+      <p data-i18n="manual_force_desc">
+        在管理頁面中點擊「指定重新抓取」按鈕，可手動輸入 Handle ID (例如 @pewdiepie) 強制系統忽略快取，立即向 YouTube 查詢最新資料。
+      </p>
+
+      <h2 data-i18n="manual_community_title">🔗 社群分享與協作應用</h2>
       <div class="streamer-box">
-        <span class="streamer-title">💡 活用 JSON 檔案建立社群連結</span>
-        <p>
+        <span class="streamer-title" data-i18n="manual_json_title">💡 活用 JSON 檔案建立社群連結</span>
+        <p data-i18n="manual_json_desc">
           本工具的「匯入/匯出」功能不僅是用於個人備份，更是連結 YouTube 與
           Discord 社群的橋樑。
         </p>
 
         <p>
-          <strong>建立社群共用名單</strong><br />
-          社群管理者或熱心成員可將收集完整的暱稱資料
-          <strong>「匯出」</strong> 為 JSON 檔，並分享至 Discord
-          伺服器供成員下載。
+          <strong data-i18n="manual_community_1_title">建立社群共用名單</strong><br />
+          <span data-i18n="manual_community_1_desc">社群管理者或熱心成員可將收集完整的暱稱資料 <strong>「匯出」</strong> 為 JSON 檔，並分享至 Discord 伺服器供成員下載。</span>
         </p>
 
         <p>
-          <strong>強化社群凝聚力 (Discord 引流)</strong><br />
-          透過分享「懶人包」或「認證名單」，可吸引 YouTube 觀眾加入 Discord
-          獲取資源。新成員匯入名單後，能立即辨識聊天室中的常客與會員，大幅降低陌生感，提升互動體驗。
+          <strong data-i18n="manual_community_2_title">強化社群凝聚力 (Discord 引流)</strong><br />
+          <span data-i18n="manual_community_2_desc">透過分享「懶人包」或「認證名單」，可吸引 YouTube 觀眾加入 Discord 獲取資源。新成員匯入名單後，能立即辨識聊天室中的常客與會員，大幅降低陌生感，提升互動體驗。</span>
         </p>
       </div>
 
-      <h2>💾 匯入與匯出教學</h2>
+      <h2 data-i18n="manual_import_title">💾 匯入與匯出教學</h2>
       <div class="highlight-box">
-        <span class="highlight-title">操作步驟</span>
+        <span class="highlight-title" data-i18n="manual_step_title">操作步驟</span>
         <ol>
-          <li>點擊瀏覽器右上角的擴充功能圖示。</li>
-          <li>點擊 <strong>「📋 開啟快取管理頁面」</strong>。</li>
-          <li>點擊右上角的 <strong>匯入 (Import)</strong> 按鈕並選擇檔案。</li>
+          <li data-i18n="manual_step_1">點擊瀏覽器右上角的擴充功能圖示。</li>
+          <li data-i18n="manual_step_2">點擊 <strong>「📋 開啟快取管理頁面」</strong>。</li>
+          <li data-i18n="manual_step_3">點擊右上角的 <strong>匯入 (Import)</strong> 按鈕並選擇檔案。</li>
           <li>
-            在跳出的視窗中選擇匯入模式：
+            <span data-i18n="manual_step_4">在跳出的視窗中選擇匯入模式：</span>
             <ul>
               <li>
-                <strong>🛡️ 信任匯入：</strong>
-                系統將保留資料的原始時間戳記。但為了確保資料準確性，<strong>含有訂閱數</strong>的資料仍會被標記為過期並自動重新驗證。
+                <strong data-i18n="btn_trust">🛡️ 信任匯入：</strong>
+                <span data-i18n="manual_trust_desc">系統將保留資料的原始時間戳記。但為了確保資料準確性，<strong>含有訂閱數</strong>的資料仍會被標記為過期並自動重新驗證。</span>
               </li>
               <li>
-                <strong>⚠️ 安全匯入：</strong>
-                系統將把所有資料標記為「過期」，並在背景自動驗證正確性。適合用於來源不明的檔案。
+                <strong data-i18n="btn_safe">⚠️ 安全匯入：</strong>
+                <span data-i18n="manual_safe_desc">系統將把所有資料標記為「過期」，並在背景自動驗證正確性。適合用於來源不明的檔案。</span>
               </li>
             </ul>
           </li>
         </ol>
       </div>
 
-      <h2>🛠️ 常見問題 (FAQ)</h2>
+      <h2 data-i18n="manual_faq_title">🛠️ 常見問題 (FAQ)</h2>
 
       <div class="faq-item">
-        <span class="q">Q: 為什麼有些名字顯示虛線底線？</span>
-        <div class="a">
-          A:
-          代表該資料是從外部匯入或已過期。只要該使用者再次發言，系統就會自動更新，請放心使用。
+        <span class="q" data-i18n="manual_q1">Q: 為什麼有些名字顯示虛線底線？</span>
+        <div class="a" data-i18n="manual_a1">
+          A: 代表該資料是從外部匯入或已過期。只要該使用者再次發言，系統就會自動更新，請放心使用。
         </div>
       </div>
 
       <div class="faq-item">
-        <span class="q">Q: 出現無法還原或 [OUTPUT NOT AVAILABLE]？</span>
-        <div class="a">
-          A: 這是 YouTube 的暫時性限制（防爬蟲機制）。請休息 5
-          分鐘後再試，或在設定中切換為「慢速模式」。
+        <span class="q" data-i18n="manual_q4">Q: 出現無法還原或 [OUTPUT NOT AVAILABLE]？</span>
+        <div class="a" data-i18n="manual_a4">
+          A: 這是 YouTube 的暫時性限制（防爬蟲機制）。請休息 5 分鐘後再試，或在設定中切換為「慢速模式」。
         </div>
       </div>
     </div>
 
+    <!-- 引入 I18n 與設定 -->
+    <script src="../../js/shared/config.js"></script>
+    <script src="../../js/shared/utils.js"></script>
+    <script src="../../js/shared/locales.js"></script>
+    <script src="../../js/shared/i18n.js"></script>
     <script src="manual.js"></script>
   </body>
 </html>

@@ -107,3 +107,23 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// === 格式化 Bytes ===
+// 用途：將位元組轉換為易讀的格式 (KB, MB)
+function formatBytes(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB"];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) {
+    bytes /= 1024;
+    i++;
+  }
+  return `${bytes.toFixed(1)} ${units[i]}`;
+}
+
+// === 天數轉毫秒 ===
+// 用途：將天數轉換為毫秒 (Day -> ms)
+// 公式：天數 * 24小時 * 60分 * 60秒 * 1000毫秒
+function daysToMs(days) {
+  return (days || 0) * 24 * 60 * 60 * 1000;
+}

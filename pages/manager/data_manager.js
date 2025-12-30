@@ -3,11 +3,10 @@
 // 用途：封裝 IndexedDB 操作 (透過 idb-keyval)
 // ===========================================================
 
-const { TTL, SETTINGS_KEY, DEFAULT_TTL_DAYS, DEFAULT_DELETE_DAYS } =
+const { SETTINGS_KEY, DEFAULT_TTL_DAYS, DEFAULT_DELETE_DAYS } =
   window.AppConfig;
 
 const DataManager = {
-  TTL: TTL, // 舊的靜態 TTL 保留給 expireItems 用
   LOCK_NAME: "yt_realname_storage_lock",
 
   // === 內部 helper: 取得動態設定 ===
@@ -36,8 +35,8 @@ const DataManager = {
       const now = Date.now();
 
       // 計算毫秒數
-      const ttlMs = settings.ttlDays * 24 * 60 * 60 * 1000;
-      const deleteMs = settings.deleteDays * 24 * 60 * 60 * 1000;
+      const ttlMs = daysToMs(settings.ttlDays);
+      const deleteMs = daysToMs(settings.deleteDays);
 
       for (const [handle, data] of entries) {
         if (!data) continue;
@@ -55,7 +54,7 @@ const DataManager = {
           const deleteTime = ts + deleteMs;
           const remainingMs = deleteTime - now;
           // 無條件進位算天數
-          daysUntilDelete = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+          daysUntilDelete = Math.ceil(remainingMs / daysToMs(1));
         }
 
         list.push({
@@ -112,7 +111,7 @@ const DataManager = {
 
     // 取得當前設定的 TTL 天數
     const settings = await this._getSettings();
-    const ttlMs = settings.ttlDays * 24 * 60 * 60 * 1000;
+    const ttlMs = daysToMs(settings.ttlDays);
 
     // 設定為：「現在時間」 減去 「TTL」 再多減 10 分鐘
     // 意義：這筆資料在 10 分鐘前「剛好過期」。
@@ -161,7 +160,7 @@ const DataManager = {
     
     // 1. 取得設定 & 計算強制過期時間
     const settings = await this._getSettings();
-    const ttlMs = settings.ttlDays * 24 * 60 * 60 * 1000;
+    const ttlMs = daysToMs(settings.ttlDays);
     const forcedExpiredTs = now - ttlMs - (10 * 60 * 1000);
     
     // 2. 準備候選資料

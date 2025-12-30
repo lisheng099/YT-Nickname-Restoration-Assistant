@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "YT 暱稱還原助手",
+    "description": "擴充功能名稱"
+  },
+  "appDesc": {
+    "message": "將 YouTube 聊天室與留言區的帳戶代稱(@ID)自動替換為暱稱(頻道顯示名稱)。採用本地背景爬蟲技術，不傳輸資料至第三方伺服器。",
+    "description": "擴充功能描述"
+  }
+}

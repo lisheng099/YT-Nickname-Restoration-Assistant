@@ -36,8 +36,8 @@ const BgCache = {
   // === 刪除舊資料邏輯 ===
   pruneOldData: async function (days) {
     if (!days || days < 1) return;
-
-    const ONE_DAY = 24 * 60 * 60 * 1000;
+    
+    const ONE_DAY = daysToMs(1);
     const cutoffTime = Date.now() - days * ONE_DAY;
     let deleteCount = 0;
 
@@ -149,8 +149,19 @@ const BgCache = {
     try {
       const diskData = await idbKeyval.get(handle);
       if (diskData) {
-        this.setMemory(handle, diskData);
-        return diskData;
+        // 動態計算過期狀態
+        const userTTL = await this.getUserTTL();
+        const now = Date.now();
+        const isExpired = now - diskData.ts > userTTL;
+
+        // 雖然原始資料只有 name/subs/ts，但回傳時需附帶 isExpired
+        const result = {
+            ...diskData,
+            isExpired: isExpired
+        };
+
+        this.setMemory(handle, result);
+        return result;
       }
     } catch (err) {
       Logger.red(`[Cache] IDB Read Error:`, err);
@@ -241,5 +252,20 @@ const BgCache = {
     Logger.info(
       `[BgCache] 已作廢 ${list.length} 筆記憶體快取 (同步 Manager 操作)`
     );
+  },
+
+  // 輔助方法：取得使用者設定的 TTL
+  getUserTTL: function () {
+    return new Promise((resolve) => {
+      const { SETTINGS_KEY, DEFAULT_TTL_DAYS } = AppConfig;
+      chrome.storage.local.get(SETTINGS_KEY, (res) => {
+        const settings = res[SETTINGS_KEY];
+        let days = DEFAULT_TTL_DAYS;
+        if (settings && settings.ttlDays) {
+          days = parseInt(settings.ttlDays, 10);
+        }
+        resolve(daysToMs(days));
+      });
+    });
   },
 };

@@ -1,4 +1,7 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await I18n.init();
+  I18n.render();
+
   const btn = document.getElementById("testBtn");
   const input = document.getElementById("handleInput");
   const els = {
@@ -12,12 +15,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btn.addEventListener("click", () => {
     const handle = input.value.trim();
-    if (!handle) return alert("請輸入 Handle ID");
+    if (!handle) return alert(I18n.t("alert_input_handle"));
 
     // UI 重置
     btn.disabled = true;
-    btn.textContent = "抓取中...";
-    els.status.textContent = "請求發送中...";
+    btn.textContent = I18n.t("fetching"); 
+    els.status.textContent = I18n.t("sending"); 
     els.status.className = "value";
     els.name.textContent = "-";
     els.subs.textContent = "-";
@@ -35,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
       (response) => {
         const duration = Date.now() - startTime;
         btn.disabled = false;
-        btn.textContent = "強制抓取 (更新快取)";
+        btn.textContent = I18n.t("btn_force_fetch"); 
 
         console.log("[Test Result]", response);
         els.raw.textContent = JSON.stringify(response, null, 2);
@@ -46,15 +49,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (response.success) {
-          els.status.innerHTML = `<span class="status-ok">成功 (耗時 ${duration}ms)</span>`;
+          els.status.innerHTML = `<span class="status-ok">${I18n.t("status_ok")} (${duration}ms)</span>`;
           els.name.textContent = response.nameRaw;
-          els.subs.textContent = response.subs + " (原始數值)";
+          els.subs.textContent = response.subs + " (Raw)";
         } else {
-          els.status.innerHTML = `<span class="status-err">失敗: ${
-            response.error || "未知錯誤"
+          els.status.innerHTML = `<span class="status-err">${I18n.t("status_fail")}: ${
+            response.error || "Unknown"
           }</span>`;
           if (response.status === 429) {
-            els.status.innerHTML += " (被 YouTube 限流)";
+            els.status.innerHTML += " " + I18n.t("status_rate_limit");
           }
         }
       }

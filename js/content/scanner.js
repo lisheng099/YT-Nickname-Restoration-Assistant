@@ -11,7 +11,7 @@ class PageScanner {
     // 批次處理佇列
     this.mutationQueue = new Set();
     this.mutationTimer = null;
-    this.BATCH_DELAY = 200;
+    this.BATCH_DELAY = 50;
 
     this.maxLength = window.AppConfig?.DEFAULT_MAX_LENGTH || 20;
 
@@ -138,10 +138,12 @@ class PageScanner {
 
   init() {
     if (window === window.top || location.pathname.includes("live_chat")) {
-      this.loadConfig();
-      this.triggerBurstReset();
-      this.startObservation();
-      this.setupUrlListener();
+      I18n.init().then(() => {
+        this.loadConfig();
+        this.triggerBurstReset();
+        this.startObservation();
+        this.setupUrlListener();
+      });
     }
   }
 
