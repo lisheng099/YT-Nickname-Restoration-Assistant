@@ -26,11 +26,11 @@ const DataBridge = {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === "local") {
         if (changes[SETTINGS_KEY]) {
-            this.updateTTL(changes[SETTINGS_KEY].newValue);
+          this.updateTTL(changes[SETTINGS_KEY].newValue);
         }
         // 監聽後端保險絲
         if (changes[FUSE_BE_KEY]) {
-            this.fuseBackendStatus = changes[FUSE_BE_KEY].newValue.status;
+          this.fuseBackendStatus = changes[FUSE_BE_KEY].newValue.status;
         }
       }
     });
@@ -65,7 +65,7 @@ const DataBridge = {
       // [情況 B] 快取命中但已過期
       // 這裡無論後端保險絲狀態如何，都先回傳快取資料 (確保畫面有內容)
       callback(cachedData);
-      
+
       // 只有當「後端保險絲正常」時，才發起背景更新
       // 如果後端熔斷，就只顯示舊資料，不發送網路請求，避免進一步錯誤
       if (this.fuseBackendStatus === "NORMAL") {
@@ -78,7 +78,7 @@ const DataBridge = {
         callback(null);
         return;
       }
-      
+
       // 只有後端正常時才發起高優先級請求
       this.fetchBackground(handle, "high", callback);
     }
@@ -122,10 +122,13 @@ const DataBridge = {
       (response) => {
         // 錯誤處理
         if (chrome.runtime.lastError || !response || !response.success) {
-          // 網路請求失敗，默默不做事 (如果是 expired update)
-          // 或者回傳 null (如果是 high priority)
-          if (typeof callback === "function" && !isExpiredUpdate) {
-            callback(null);
+          if (typeof callback === "function") {
+            // 如果是低優先級更新失敗，回傳特殊錯誤旗標；否則回傳 null
+            if (isExpiredUpdate) {
+              callback({ _fetchFailed: true });
+            } else {
+              callback(null);
+            }
           }
           return;
         }

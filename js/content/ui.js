@@ -38,18 +38,32 @@ const TooltipManager = {
 
   // =======================================================
   // [模式 1] renderStandard (標準替換)
-  // 用途：直接清空元素內容，換成「暱稱 + 徽章」。
+  // 用途：清空原生文字節點內容，注入自訂「暱稱 + 徽章」。
   // =======================================================
   renderStandard: function (target, handle, displayName, subs, isExpired) {
     if (!target.isConnected) return;
 
-    // 清空舊內容
-    target.textContent = "";
+    // 移除舊有的自訂注入節點 (避免重複疊加)
+    const existingInjected = target.querySelectorAll('.rn-injected-standard');
+    existingInjected.forEach(el => el.remove());
 
-    // 建立新內容
+    // 保留原本的 TextNode (為了讓 Polymer/Virtual DOM 可以寫入更新並觸發觀察者)，僅清空其顯示
+    target.childNodes.forEach(child => {
+        if (child.nodeType === Node.TEXT_NODE) {
+            child.textContent = "";
+        }
+    });
+
+    // 建立新內容容器
+    const container = document.createElement("span");
+    container.className = "rn-injected-standard";
+    container.style.display = "inline-flex";
+    container.style.alignItems = "center";
+    container.style.gap = "4px";
+
     const span = document.createElement("span");
     span.textContent = displayName;
-    this.applyTextStyle(target, span, isExpired);
+    this.applyTextStyle(container, span, isExpired);
 
     // 點擊複製功能
     if (this.canCopy) this.bindCopyEvent(span, handle);
@@ -57,18 +71,13 @@ const TooltipManager = {
     // 組合徽章
     const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
     const badge = this.getBadgeIcon(numSubs);
+    container.appendChild(span);
     if (badge) {
-      target.style.display = "inline-flex";
-      target.style.alignItems = "center";
-      target.style.gap = "4px";
-      target.appendChild(span);
-      target.appendChild(badge);
-    } else {
-      target.style.display = "";
-      target.appendChild(span);
+      container.appendChild(badge);
     }
+    target.appendChild(container);
 
-    // 標記完成
+    // 標記完成與綁定 (綁定在 target 上，讓外部 scanner 與 tooltip 能正確讀取)
     target.dataset.rnReplaced = "yes";
     this.attachData(target, handle, displayName, subs, isExpired);
   },

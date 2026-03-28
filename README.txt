@@ -1,4 +1,4 @@
-﻿# YT 暱稱還原助手 (YT Nickname Restoration Assistant)
+# YT 暱稱還原助手 (YT Nickname Restoration Assistant)
 
 > 專案儲存庫 (GitHub Repository): > https://github.com/lisheng099/YT-Nickname-Restoration-Assistant
 
@@ -20,6 +20,14 @@
 ---
 
 ## 📝 修改紀錄 (Changelog)
+
+### v1.2.0 (2026-03-28)
+- [效能] 大幅優化 DOM 掃描器 (PageScanner)，精準定位 Shadow Root 容器，解決影片留言區與直播聊天室在大量訊息捲動時的高 CPU 消耗與卡頓問題。
+- [修復] 徹底修復 YouTube 留言區切換排序 (熱門/最新) 時，因為 Virtual DOM 或異步載入導致的暱稱錯置 (Ghosting) 與張冠李戴問題。
+- [架構] 重新設計 UI 渲染邏輯 (保留原生 TextNode)，確保能完美相容 YouTube 底層的 Polymer 框架更新機制。
+- [修復] 修復當背景資料抓取失敗（如遭到限流或網路異常）時，頁面元素被永久鎖死在 "fetching" 狀態的問題，確保網路恢復後能重新抓取。
+- [修復] 解決懸浮資訊卡 (Tooltip) 在特定的 DOM 嵌套結構 (Nested Spans) 下會被自己覆寫，導致顯示空白 ID 或截斷名稱的邏輯陷阱 Bug。
+- [語系] 全面檢查並深度優化簡體中文 (zh-CN) 的在地化慣用語（例如：資料->数据、檔案->文件、介面->界面 等），提升國際化體驗。
 
 ### v1.1.2 (2025-12-30)
 - [新增] 前後端保險絲機制
