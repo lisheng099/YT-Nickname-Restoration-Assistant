@@ -118,6 +118,7 @@ async function handleCacheGet(handle, sendResponse) {
         name: result.nameRaw,
         subs: result.subs,
         isExpired: false,
+        ts: Date.now(),
       });
     } else {
       sendResponse(null);

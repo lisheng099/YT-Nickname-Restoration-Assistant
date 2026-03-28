@@ -44,12 +44,23 @@ const DataBridge = {
     this.currentTTL = daysToMs(days);
   },
 
+  // 前端短期熱快取 (僅存活於單次頁面生命週期)，用來消除非同步重繪造成的閃爍
+  localCache: new Map(),
+
   // === 核心方法：獲取資料 ===
   // 參數：
   // - handle: 要查詢的 ID
   // - callback: 當拿到資料時執行的函式 (data) => void
   getData: async function (handle, callback) {
     if (!handle) return;
+
+    // 0. 攔截：如果本地熱快取已有資料，直接同步回傳，徹底消除閃爍！
+    // (因為存活期僅在單一分頁生命週期內，我們可以直接視為不過期)
+    if (this.localCache.has(handle)) {
+        const hotData = this.localCache.get(handle);
+        callback({ name: hotData.name, subs: hotData.subs, isExpired: false });
+        return; // 同步結束，不發送任何異步請求
+    }
 
     // 1. 先向背景查詢快取 (Cache First)
     const cachedData = await this.queryCache(handle);
@@ -58,6 +69,7 @@ const DataBridge = {
     if (cachedData) {
       // [情況 A] 快取命中且有效
       if (!cachedData.isExpired) {
+        this.localCache.set(handle, { name: cachedData.name, subs: cachedData.subs });
         callback(cachedData);
         return;
       }
@@ -95,8 +107,14 @@ const DataBridge = {
             return;
           }
           // 計算過期狀態
-          const ts = response.ts || 0;
-          const isExpired = Date.now() - ts > this.currentTTL;
+          let isExpired = false;
+          // 如果背景已經明確判斷了 isExpired，優先使用
+          if (response.hasOwnProperty('isExpired')) {
+            isExpired = response.isExpired;
+          } else {
+            const ts = response.ts || 0;
+            isExpired = Date.now() - ts > this.currentTTL;
+          }
 
           resolve({
             name: response.name,
@@ -140,6 +158,9 @@ const DataBridge = {
         }
 
         if (finalName === "YouTube") return;
+
+        // 寫入熱快取，確保往後該分頁內的重繪皆為同步完成
+        this.localCache.set(handle, { name: finalName, subs: response.subs || 0 });
 
         // 回傳最新資料 (此時肯定不過期)
         callback({

@@ -47,12 +47,12 @@ const TooltipManager = {
     const existingInjected = target.querySelectorAll('.rn-injected-standard');
     existingInjected.forEach(el => el.remove());
 
-    // 保留原本的 TextNode (為了讓 Polymer/Virtual DOM 可以寫入更新並觸發觀察者)，僅清空其顯示
-    target.childNodes.forEach(child => {
-        if (child.nodeType === Node.TEXT_NODE) {
-            child.textContent = "";
-        }
-    });
+    // 不要去動原生 TextNode！這樣就不會被 Polymer 發現並強制覆寫導致閃動或疊加。
+    // 我們利用 CSS 直接把整個容器的原生文字縮成 0 就會隱形，讓 Polymer 自己去玩它那看不見的文字。
+    if (!target.dataset.rnOrigFontSize) {
+      target.dataset.rnOrigFontSize = window.getComputedStyle(target).fontSize || "13px";
+    }
+    target.style.fontSize = "0px";
 
     // 建立新內容容器
     const container = document.createElement("span");
@@ -60,6 +60,8 @@ const TooltipManager = {
     container.style.display = "inline-flex";
     container.style.alignItems = "center";
     container.style.gap = "4px";
+    // 為了讓新名字正常顯示，我們在新容器把字體大小加回來
+    container.style.fontSize = target.dataset.rnOrigFontSize;
 
     const span = document.createElement("span");
     span.textContent = displayName;
@@ -255,7 +257,7 @@ const TooltipManager = {
       i.title = I18n.t("subs_10k");
     } else if (subs >= 1000) {
       i.style.background = "#CD7F32";
-      i.title = I18n.t("subs_1000"); 
+      i.title = I18n.t("subs_1000");
     } else if (subs >= 500) {
       i.style.background = "#8D6E63";
       i.title = I18n.t("subs_potential");
