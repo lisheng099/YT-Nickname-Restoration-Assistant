@@ -55,10 +55,18 @@ globalScope.AppConfig = {
     FRONTEND_ERROR_THRESHOLD: 20,
   },
 
+  // 失敗快取 (Negative Cache)
+  // 用途：查不到或抓取失敗的 handle 在這段時間內不再重複發送請求。
+  NEGATIVE_CACHE: {
+    NOT_FOUND_MS: 6 * 60 * 60 * 1000, // 頻道不存在 (404)：6 小時
+    ERROR_MS: 60 * 1000, // 其他失敗 (逾時、429、解析失敗)：1 分鐘
+    MAX_ENTRIES: 2000, // 記憶體內最多保留筆數
+  },
+
   // 抓取速度控制 (Rate Limiting)
   // 用途：設定每次爬蟲抓取後的延遲時間範圍（毫秒），以降低被 YouTube 偵測為機器人的風險。
   SPEED_PRESETS: {
     NORMAL: { MIN: 1200, MAX: 2500 }, // 一般模式：隨機延遲 1.2 ~ 2.5 秒
     SLOW: { MIN: 3500, MAX: 6000 }, // 安全模式：隨機延遲 3.5 ~ 6.0 秒 (適用於高風險情境)
   },
-};
+};

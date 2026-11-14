@@ -30,7 +30,8 @@ const DataBridge = {
         }
         // 監聽後端保險絲
         if (changes[FUSE_BE_KEY]) {
-            this.fuseBackendStatus = changes[FUSE_BE_KEY].newValue.status;
+            this.fuseBackendStatus =
+              changes[FUSE_BE_KEY].newValue?.status || "NORMAL";
         }
       }
     });
@@ -52,7 +53,14 @@ const DataBridge = {
     if (!handle) return;
 
     // 1. 先向背景查詢快取 (Cache First)
-    const cachedData = await this.queryCache(handle);
+    let cachedData = null;
+    try {
+      cachedData = await this.queryCache(handle);
+    } catch (e) {
+      // 擴充功能更新後舊分頁的連線會失效，回報無資料讓畫面維持原樣
+      callback(null);
+      return;
+    }
 
     // 2. 判斷資料狀態
     if (cachedData) {
@@ -90,7 +98,8 @@ const DataBridge = {
       chrome.runtime.sendMessage(
         { type: "CACHE_GET", handle: handle },
         (response) => {
-          if (!response) {
+          // 背景服務重啟或擴充功能更新時 lastError 會有值
+          if (chrome.runtime.lastError || !response) {
             resolve(null);
             return;
           }
@@ -148,4 +157,4 @@ const DataBridge = {
     );
   },
 };
-DataBridge.init();
+DataBridge.init();

@@ -6,7 +6,11 @@ const BgFetcher = {
   queue: { high: [], low: [] },
   isProcessing: false,
   lastFetchTime: 0,
-  activeTasks: new Map(), // 正在進行中的網路請求 { handle: [resolveFns...] }
+  activeTasks: new Map(), // 正在進行中的網路請求 { taskKey: [resolveFns...] }
+
+  // 失敗快取：記錄近期查不到或抓取失敗的 handle，避免同一人每次發言都重抓
+  // { taskKey: { until: 到期時間, result: 回傳給前台的錯誤物件 } }
+  failedLookups: new Map(),
   
   // 錯誤計數器 (用於觸發後端熔斷)
   consecutiveErrors: 0,
@@ -41,22 +45,60 @@ const BgFetcher = {
         }
         // 監聽後端保險絲狀態變更
         if (changes[AppConfig.FUSE_BE_KEY]) {
-          this.fuseBackend = changes[AppConfig.FUSE_BE_KEY].newValue;
+          this.fuseBackend = changes[AppConfig.FUSE_BE_KEY].newValue || {
+            status: "NORMAL",
+            reason: null,
+          };
           Logger.info(`[BgFetcher] 後端保險絲狀態更新: ${this.fuseBackend.status}`);
+          // 手動復歸後從零開始計算錯誤
+          if (this.fuseBackend.status === "NORMAL") {
+            this.consecutiveErrors = 0;
+            this.failedLookups.clear();
+          }
         }
       }
     });
   },
 
+  // 佇列與失敗快取使用的鍵值 (YouTube handle 不分大小寫)
+  taskKey: function (handle) {
+    return String(handle || "").trim().toLowerCase();
+  },
+
   // 查詢並等待執行中的任務 (Request Coalescing)
   getRunningTask: function (handle) {
-    if (this.activeTasks.has(handle)) {
+    const key = this.taskKey(handle);
+    if (this.activeTasks.has(key)) {
       Logger.info(`[Fetcher] 攔截重複請求 (In-Flight): ${handle}`);
       return new Promise((resolve) => {
-        this.activeTasks.get(handle).push(resolve);
+        this.activeTasks.get(key).push(resolve);
       });
     }
     return null;
+  },
+
+  // === 失敗快取 ===
+  getFailedLookup: function (key) {
+    const entry = this.failedLookups.get(key);
+    if (!entry) return null;
+    if (entry.until <= Date.now()) {
+      this.failedLookups.delete(key);
+      return null;
+    }
+    return entry.result;
+  },
+
+  rememberFailure: function (key, result) {
+    const cfg = AppConfig.NEGATIVE_CACHE || {};
+    const ttl = result.notFound
+      ? cfg.NOT_FOUND_MS || 6 * 60 * 60 * 1000
+      : cfg.ERROR_MS || 60 * 1000;
+    const max = cfg.MAX_ENTRIES || 2000;
+    if (this.failedLookups.size >= max) {
+      const oldest = this.failedLookups.keys().next().value;
+      this.failedLookups.delete(oldest);
+    }
+    this.failedLookups.set(key, { until: Date.now() + ttl, result });
   },
 
   updateSpeedMode: function (mode) {
@@ -88,20 +130,35 @@ const BgFetcher = {
         this.tabQuotas.set(tabId, this.initialPollQuota);
       }
 
+      const key = this.taskKey(handle);
+      if (key.length <= 1) {
+        resolve({ error: "Invalid handle" });
+        return;
+      }
+
+      // 近期才失敗過的 handle 直接回傳上次結果 (手動重新整理除外)
+      if (!forceRefresh || priority !== "high") {
+        const failed = this.getFailedLookup(key);
+        if (failed) {
+          resolve(failed);
+          return;
+        }
+      }
+
       // 請求去重 (Merge Requests)
-      if (this.activeTasks.has(handle)) {
+      if (this.activeTasks.has(key)) {
         if (priority === "high") {
-          this.promoteTask(handle, tabId);
+          this.promoteTask(key, tabId);
         }
         Logger.orange(`[Duplicate] ${handle} 正在抓取中，合併請求。`);
-        this.activeTasks.get(handle).push(resolve);
+        this.activeTasks.get(key).push(resolve);
         return;
       }
 
       // 建立新任務
-      this.activeTasks.set(handle, [resolve]);
+      this.activeTasks.set(key, [resolve]);
 
-      const taskItem = { handle, tabId };
+      const taskItem = { handle, key, tabId };
       if (priority === "high") {
         this.queue.high.unshift(taskItem);
       } else {
@@ -118,17 +175,17 @@ const BgFetcher = {
     });
   },
 
-  promoteTask: function (handle, tabId) {
+  promoteTask: function (key, tabId) {
     let foundIndex = -1;
     let foundQueue = null;
 
     // 檢查 High Queue
-    foundIndex = this.queue.high.findIndex((t) => t.handle === handle);
+    foundIndex = this.queue.high.findIndex((t) => t.key === key);
     if (foundIndex !== -1) {
       foundQueue = this.queue.high;
     } else {
       // 檢查 Low Queue
-      foundIndex = this.queue.low.findIndex((t) => t.handle === handle);
+      foundIndex = this.queue.low.findIndex((t) => t.key === key);
       if (foundIndex !== -1) {
         foundQueue = this.queue.low;
       }
@@ -138,7 +195,7 @@ const BgFetcher = {
       const task = foundQueue.splice(foundIndex, 1)[0];
       if (tabId) task.tabId = tabId;
       this.queue.high.unshift(task);
-      Logger.info(`[Promote] ${handle} 優先權提升至首位`);
+      Logger.info(`[Promote] ${task.handle} 優先權提升至首位`);
     }
   },
 
@@ -155,7 +212,7 @@ const BgFetcher = {
 
       const nextTask =
         this.queue.high.length > 0 ? this.queue.high[0] : this.queue.low[0];
-      const currentTabId = typeof nextTask === "object" ? nextTask.tabId : null;
+      const currentTabId = nextTask.tabId;
 
       // 判斷加速模式
       let isBurst = false;
@@ -183,12 +240,17 @@ const BgFetcher = {
         await new Promise((r) => setTimeout(r, requiredDelay - elapsed));
       }
 
+      // 等待期間保險絲可能已熔斷並清空佇列
+      if (this.fuseBackend.status === "TRIPPED") break;
+
       // 取出任務
       const task =
         this.queue.high.length > 0
           ? this.queue.high.shift()
           : this.queue.low.shift();
-      const handle = typeof task === "object" ? task.handle : task;
+      if (!task) break;
+      const handle = task.handle;
+      const key = task.key;
 
       try {
         // 顯示距上次抓取時間
@@ -210,8 +272,9 @@ const BgFetcher = {
           // 寫入 Cache
           BgCache.set(handle, { name: result.nameRaw, subs: result.subs });
           
-          // 成功時重置錯誤計數
+          // 成功時重置錯誤計數與失敗快取
           this.consecutiveErrors = 0;
+          this.failedLookups.delete(key);
 
           if (isBurst && currentTabId) {
             const left = this.tabQuotas.get(currentTabId) - 1;
@@ -221,20 +284,20 @@ const BgFetcher = {
           }
         } else {
           Logger.orange(`[Fetch Fail] ${handle}: ${result.error}`);
-          // 如果是資料找不到 (可能YT改版)，檢查健康度
-          if (result.error === "Name not found") {
-             this.checkBackendHealth();
-          }
+          this.rememberFailure(key, result);
         }
 
-        const waiters = this.activeTasks.get(handle) || [];
-        waiters.forEach((resolve) => resolve(result));
+        // 先回覆這個任務，再檢查健康度 (熔斷時會清空其餘等待者)
+        this.settleTask(key, result);
+
+        // 頻道不存在 (404) 屬於正常結果、使用者本身離線也不計，其餘失敗才計入健康度
+        if (!result.success && !result.notFound && !result.offline) {
+          this.checkBackendHealth();
+        }
       } catch (err) {
         Logger.red(`[Fetch Error] ${handle}:`, err);
-        const waiters = this.activeTasks.get(handle) || [];
-        waiters.forEach((resolve) => resolve({ error: err.message }));
-      } finally {
-        this.activeTasks.delete(handle);
+        this.settleTask(key, { error: err.message });
+        this.checkBackendHealth();
       }
     }
 
@@ -248,8 +311,6 @@ const BgFetcher = {
        
        // 模擬 1: 網路層級錯誤 (如 429 Too Many Requests)
        if (this.SIMULATE_ERROR === "NETWORK") {
-           this.consecutiveErrors++;
-           this.checkBackendHealth();
            return { error: "Simulated Network Error (429)", status: 429 };
        }
        
@@ -280,9 +341,6 @@ const BgFetcher = {
       clearTimeout(timeoutId);
 
       if (response.status === 429) {
-        // 429 錯誤也納入計數
-        this.consecutiveErrors++;
-        this.checkBackendHealth();
         return { error: "Too Many Requests", status: 429 };
       }
 
@@ -293,7 +351,14 @@ const BgFetcher = {
         return { error: "Redirected to login", status: 429 };
       }
 
-      if (!response.ok) return { error: `HTTP ${response.status}` };
+      // 404 代表這個 handle 沒有對應的頻道
+      if (response.status === 404) {
+        return { error: "Channel not found", status: 404, notFound: true };
+      }
+
+      if (!response.ok) {
+        return { error: `HTTP ${response.status}`, status: response.status };
+      }
 
       const text = await response.text();
       const parsed = YTParser.parse(text);
@@ -305,11 +370,20 @@ const BgFetcher = {
       return { error: "Name not found" };
     } catch (err) {
       clearTimeout(timeoutId);
-      return { error: err.message };
+      const offline =
+        typeof navigator !== "undefined" && navigator.onLine === false;
+      return { error: err.message, offline };
     }
   },
 
-  // 檢查後端健康狀態
+  // 回覆並移除一個任務的所有等待者
+  settleTask: function (key, result) {
+    const waiters = this.activeTasks.get(key) || [];
+    this.activeTasks.delete(key);
+    waiters.forEach((resolve) => resolve(result));
+  },
+
+  // 記錄一次失敗並檢查後端健康狀態 (每次失敗只計一次)
   checkBackendHealth: function () {
     this.consecutiveErrors++;
     const threshold = AppConfig.FUSE_CONFIG.BACKEND_ERROR_THRESHOLD || 10;
@@ -329,13 +403,20 @@ const BgFetcher = {
       timestamp: Date.now()
     };
     
+    // 立即套用狀態，不等待 Storage 事件回來
+    this.fuseBackend = newState;
+
     // 寫入 Storage (僅更新後端保險絲 Key)
     chrome.storage.local.set({ [AppConfig.FUSE_BE_KEY]: newState });
     
-    // 清空當前佇列
+    // 清空當前佇列，並回覆所有等待中的請求，避免前台一直停在抓取狀態
     this.queue.high = [];
     this.queue.low = [];
+    const pending = Array.from(this.activeTasks.values());
     this.activeTasks.clear();
+    pending.forEach((waiters) =>
+      waiters.forEach((resolve) => resolve({ error: "Fuse Tripped", status: 503 }))
+    );
   },
 
   resetQuota: function (tabId) {
@@ -352,3 +433,7 @@ const BgFetcher = {
 };
 
 BgFetcher.init();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { BgFetcher };
+}
