@@ -117,7 +117,7 @@ async function handleCacheGet(handle, sendResponse) {
       sendResponse({
         name: result.nameRaw,
         subs: result.subs,
-        isExpired: false,
+        ts: Date.now(), // 剛抓到的資料；前台以 ts 判斷是否過期
       });
     } else {
       sendResponse(null);

@@ -1,0 +1,8 @@
+{
+  "name": "yt-nickname-restoration-assistant",
+  "private": true,
+  "description": "Development tooling for the extension. The extension itself has no build step.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

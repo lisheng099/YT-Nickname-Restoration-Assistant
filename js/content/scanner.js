@@ -195,11 +195,9 @@ class PageScanner {
       // 監聽器只需綁定一次，不影響初始化 Promise
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === "local") {
-          if (changes[SETTINGS_KEY] && changes[SETTINGS_KEY].newValue.maxLength) {
-            this.maxLength = parseInt(
-              changes[SETTINGS_KEY].newValue.maxLength,
-              10
-            );
+          const newSettings = changes[SETTINGS_KEY]?.newValue;
+          if (newSettings && newSettings.maxLength) {
+            this.maxLength = parseInt(newSettings.maxLength, 10);
           }
           if (changes[CLICK_TO_COPY_KEY]) {
             TooltipManager.setCopyEnabled(
@@ -208,7 +206,8 @@ class PageScanner {
           }
           // [新增] 監聽前端保險絲變化
           if (changes[FUSE_FE_KEY]) {
-            this.fuseFrontendStatus = changes[FUSE_FE_KEY].newValue.status;
+            this.fuseFrontendStatus =
+              changes[FUSE_FE_KEY].newValue?.status || "NORMAL";
             this.checkFuseState();
           }
         }
@@ -267,6 +266,15 @@ class PageScanner {
 
     let hasUpdates = false;
     for (const m of mutations) {
+      // 目標元素的文字被 YouTube 直接改寫 (同一個元素換成另一位使用者)
+      if (
+        m.type === "childList" &&
+        m.target.nodeType === 1 &&
+        m.target.matches(this.masterSelector)
+      ) {
+        this.mutationQueue.add(m.target);
+        hasUpdates = true;
+      }
       if (m.type === "childList" && m.addedNodes.length > 0) {
         m.addedNodes.forEach((node) => {
           if (node.nodeType === 1) {
@@ -292,7 +300,7 @@ class PageScanner {
       } else if (m.type === "attributes") {
         const target = m.target;
         if (target.matches && target.matches(this.masterSelector)) {
-          this.mutationQueue.add(target.parentElement || target);
+          this.mutationQueue.add(target);
           hasUpdates = true;
         }
       }
@@ -316,16 +324,33 @@ class PageScanner {
     }
 
     if (this.mutationQueue.size === 0) return;
-    const nodesToProcess = Array.from(this.mutationQueue);
-    this.mutationQueue.clear();
-    nodesToProcess.forEach((node) => {
-      if (node.isConnected) this.scanDeep(node);
+    const queued = this.mutationQueue;
+    this.mutationQueue = new Set();
+    queued.forEach((node) => {
+      if (!node.isConnected) return;
+      // 祖先節點也在同一批時，掃描祖先就會涵蓋這個節點
+      if (this.hasQueuedAncestor(node, queued)) return;
+      this.scanDeep(node);
     });
+  }
+
+  hasQueuedAncestor(node, queued) {
+    let parent = node.parentNode;
+    while (parent) {
+      if (queued.has(parent)) return true;
+      parent = parent.parentNode;
+    }
+    return false;
   }
 
   scanDeep(root) {
     // 深層掃描也檢查保險絲，因為 scanDeep 可能被非同步呼叫
     if (!root || this.fuseFrontendStatus === "TRIPPED") return;
+
+    // Root 本身就是目標元素 (例如屬性變動時直接加入佇列的節點)
+    if (root.matches && root.matches(this.masterSelector)) {
+      this.processNode(root);
+    }
 
     // 處理當前 Root 下的一般元素 (Light DOM)
     if (root.querySelectorAll) {
@@ -339,13 +364,17 @@ class PageScanner {
       this.scanDeep(root.shadowRoot);
     }
 
-    // 找出所有可能包含 Shadow Root 的子孫元素
-    if (root.querySelectorAll) {
-      const allElements = root.querySelectorAll("*");
-      for (let i = 0; i < allElements.length; i++) {
-        if (allElements[i].shadowRoot) {
-          this.scanDeep(allElements[i].shadowRoot);
+    // 找出包含 Shadow Root 的子孫元素
+    // 只有自訂元素 (標籤名稱含 "-") 會掛載 Shadow Root，逐一走訪並略過其他元素，
+    // 不必為每一批變動建立完整的節點清單
+    if (root.firstElementChild) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      let node = walker.nextNode();
+      while (node) {
+        if (node.shadowRoot && node.localName.includes("-")) {
+          this.scanDeep(node.shadowRoot);
         }
+        node = walker.nextNode();
       }
     }
   }
@@ -365,7 +394,8 @@ class PageScanner {
         let handle = null;
 
         if (mode === this.MODE.EMBEDDED) {
-          const match = rawText.match(/(@[\w\-\.]+)/);
+          // handle 可包含各國文字，以 Unicode 字母與數字比對
+          const match = rawText.match(/(@[\p{L}\p{N}_\-.·]+)/u);
           if (match) handle = match[1];
         } else if (mode === this.MODE.WRAPPER) {
           const match = rawText.match(/^(@[^ ]+)/);
@@ -531,16 +561,20 @@ class PageScanner {
 
   setupUrlListener() {
     let lastUrl = location.href;
-    setInterval(() => {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        this.triggerBurstReset();
-        // 只有前端保險絲未熔斷時才重新掃描
-        if (this.fuseFrontendStatus === "NORMAL") {
-            setTimeout(() => this.scanDeep(document.body), 1500);
-        }
+    const onUrlMaybeChanged = () => {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      this.triggerBurstReset();
+      // 只有前端保險絲未熔斷時才重新掃描
+      if (this.fuseFrontendStatus === "NORMAL") {
+        setTimeout(() => this.scanDeep(document.body), 1500);
       }
-    }, 500);
+    };
+    // YouTube 單頁導覽完成時會發出 yt-navigate-finish
+    document.addEventListener("yt-navigate-finish", onUrlMaybeChanged);
+    window.addEventListener("popstate", onUrlMaybeChanged);
+    // 備援：部分頁面 (如 Studio) 不發事件，以較低頻率輪詢
+    setInterval(onUrlMaybeChanged, 2000);
   }
 }
 
