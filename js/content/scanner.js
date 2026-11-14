@@ -266,6 +266,15 @@ class PageScanner {
 
     let hasUpdates = false;
     for (const m of mutations) {
+      // 目標元素的文字被 YouTube 直接改寫 (同一個元素換成另一位使用者)
+      if (
+        m.type === "childList" &&
+        m.target.nodeType === 1 &&
+        m.target.matches(this.masterSelector)
+      ) {
+        this.mutationQueue.add(m.target);
+        hasUpdates = true;
+      }
       if (m.type === "childList" && m.addedNodes.length > 0) {
         m.addedNodes.forEach((node) => {
           if (node.nodeType === 1) {
