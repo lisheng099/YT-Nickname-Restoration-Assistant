@@ -1,4 +1,4 @@
-﻿# YT 暱稱還原助手 (YT Nickname Restoration Assistant)
+# YT 暱稱還原助手 (YT Nickname Restoration Assistant)
 
 > 專案儲存庫 (GitHub Repository): > https://github.com/lisheng099/YT-Nickname-Restoration-Assistant
 
@@ -16,6 +16,13 @@
 - 智慧快取： 採用 IndexedDB/Storage 本地快取技術，減少網路請求。
 - 訂閱數標記： 透過不同顏色的標記 (Badge) 快速識別頻道的訂閱規模。
 - 匯入/匯出： 支援 JSON 格式的暱稱資料備份與社群分享，並內建 Checksum 驗證機制。
+
+## 🚀 未來優化規劃 (Optimization Roadmap)
+完整技術分析與規劃請見 `OPTIMIZATION_ROADMAP.md`：
+- **擴充目標區塊**：支援留言/聊天室內的 `@mention` 標註連結、直播付費貼圖 (`yt-live-chat-paid-sticker-renderer`)、Shorts 留言面板與 YouTube Studio 後台留言區。
+- **掃描與優先權優化**：修正 `handleMutations` 動態節點過濾與 `targetConfigs` 脫節問題（確保禮物與贊助訊息不漏抓），並導入 `IntersectionObserver` 讓畫面可視範圍內的留言優先抓取。
+- **DOM 替換與防回收策略**：改用「雙節點分離法」保留原生 `@handle` 文字節點並插入獨立暱稱節點，搭配 `<a href="/@...">` 屬性識別，防止虛擬捲動回收節點時張冠李戴。
+- **抓取效率提升**：使用 `ReadableStream` 在讀完 `ytInitialData` 後提早中斷 HTML 下載以節省頻寬，並評估結合頁面既有 Innertube 資料減少背景爬蟲請求。
 
 ---
 
