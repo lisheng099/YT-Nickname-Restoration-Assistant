@@ -19,6 +19,9 @@ class PageScanner {
 
     this.maxLength = window.AppConfig?.DEFAULT_MAX_LENGTH || 20;
 
+    // 雙節點替換 (預設開啟)：保留 YouTube 原生節點並隱藏，另插入獨立的暱稱節點
+    this.dualNode = true;
+
     // === [定義 UI 渲染模式] ===
     this.MODE = {
       STANDARD: "1", // 標準全替換
@@ -134,6 +137,24 @@ class PageScanner {
         sel: "yt-live-chat-call-for-questions-renderer #author-name",
         mode: this.MODE.STANDARD,
       },
+      {
+        // 直播聊天室付費貼圖 (Super Stickers)
+        sel: "yt-live-chat-paid-sticker-renderer #author-name",
+        mode: this.MODE.STANDARD,
+      },
+
+      // --- @提及連結 (留言與聊天內文中指向 /@handle 的連結) ---
+      // mention: 只有文字剛好是 @handle 時才替換，其他連結 (頻道名稱等) 一律不動
+      {
+        sel: 'yt-attributed-string a[href^="/@"]',
+        mode: this.MODE.STANDARD,
+        mention: true,
+      },
+      {
+        sel: 'yt-formatted-string a[href^="/@"]',
+        mode: this.MODE.STANDARD,
+        mention: true,
+      },
     ];
 
     this.masterSelector = this.targetConfigs.map((c) => c.sel).join(",");
@@ -181,6 +202,7 @@ class PageScanner {
           if (settings && settings.maxLength) {
             this.maxLength = parseInt(settings.maxLength, 10);
           }
+          this.dualNode = !(settings && settings.dualNode === false);
           TooltipManager.setCopyEnabled(res[CLICK_TO_COPY_KEY] === true);
 
           // 載入前端保險絲狀態
@@ -198,6 +220,9 @@ class PageScanner {
           const newSettings = changes[SETTINGS_KEY]?.newValue;
           if (newSettings && newSettings.maxLength) {
             this.maxLength = parseInt(newSettings.maxLength, 10);
+          }
+          if (changes[SETTINGS_KEY]) {
+            this.dualNode = !(newSettings && newSettings.dualNode === false);
           }
           if (changes[CLICK_TO_COPY_KEY]) {
             TooltipManager.setCopyEnabled(
@@ -291,6 +316,13 @@ class PageScanner {
               node.querySelector &&
               (node.querySelector("ytd-comment-view-model") ||
                 node.querySelector("yt-live-chat-text-message-renderer"))
+            ) {
+              this.mutationQueue.add(node);
+              hasUpdates = true;
+            } else if (
+              // 其餘節點改以 targetConfigs 的選擇器判斷，新增的目標區塊不需要再改白名單
+              node.matches(this.masterSelector) ||
+              node.querySelector(this.masterSelector)
             ) {
               this.mutationQueue.add(node);
               hasUpdates = true;
@@ -390,6 +422,7 @@ class PageScanner {
         const rawText = (el.textContent || "").trim();
         const mode = config.mode;
         el.dataset.rnMode = mode;
+        if (config.mention) el.dataset.rnMention = "1";
 
         let handle = null;
 
@@ -401,7 +434,15 @@ class PageScanner {
           const match = rawText.match(/^(@[^ ]+)/);
           if (match) handle = match[1];
         } else {
-          if (this.isHandle(rawText)) handle = rawText;
+          if (this.isHandle(rawText)) {
+            handle = rawText;
+            // 文字被截斷 (結尾是省略號) 時，改用連結 href 的完整 handle
+            if (!config.mention && /(?:…|\.\.\.)$/.test(rawText)) {
+              handle = this.handleFromHref(el, rawText) || rawText;
+            }
+          } else if (!config.mention) {
+            handle = this.handleFromHref(el, rawText);
+          }
         }
 
         if (handle) {
@@ -421,9 +462,18 @@ class PageScanner {
             }
           }
           this.updateElement(handle, el);
-        } else {
-          if (mode === this.MODE.STANDARD && !el.dataset.rnReplaced) {
-            TooltipManager.attachData(el, null, rawText);
+        } else if (!config.mention) {
+          if (mode === this.MODE.STANDARD) {
+            // 雙節點：原生文字已不是 handle，移除獨立節點並還原顯示
+            if (el.dataset.rnDual === "1") TooltipManager.restoreDual(el);
+            // YouTube 以非 handle 的名稱重新繪製了這個元素：清除上一位留下的狀態
+            if (el.dataset.rnReplaced === "yes" && !el.querySelector("[data-rn-span]")) {
+              delete el.dataset.rnReplaced;
+              delete el.dataset.rnTargetHandle;
+            }
+            if (!el.dataset.rnReplaced) {
+              TooltipManager.attachData(el, null, rawText);
+            }
           }
         }
     } catch (err) {
@@ -455,6 +505,24 @@ class PageScanner {
 
   isHandle(text) {
     return /^@[^\s]+$/.test(text);
+  }
+
+  // 顯示文字被截斷或含空白 (例如 "@some-user…") 時，改從連結的 href 取得完整 handle。
+  // 只在文字以 "@" 開頭時才使用，避免把本來就顯示名稱的連結也送去查詢。
+  handleFromHref(el, rawText) {
+    if (!rawText || !rawText.startsWith("@")) return null;
+    const link = el.closest("a[href]") || el.querySelector("a[href]");
+    const href = link && link.getAttribute("href");
+    if (!href) return null;
+    const m = href.match(/^(?:https?:\/\/(?:www\.)?youtube\.com)?\/(@[^/?#]+)/);
+    if (!m) return null;
+    let handle = m[1];
+    try {
+      handle = decodeURIComponent(handle);
+    } catch (e) {
+      // 解不開就使用原字串
+    }
+    return this.isHandle(handle) ? handle : null;
   }
 
 // === 使用 DataBridge 更新元素 ===
@@ -539,6 +607,11 @@ class PageScanner {
         break;
       case this.MODE.STANDARD:
       default:
+        // 目標本身是連結時維持直接替換，否則隱藏原生節點會讓連結無法點擊
+        if (this.dualNode && el.dataset.rnMention !== "1" && el.tagName !== "A") {
+          TooltipManager.renderDual(el, handle, displayName, fullName, data.subs, data.isExpired);
+          break;
+        }
         TooltipManager.renderStandard(
           el,
           handle,

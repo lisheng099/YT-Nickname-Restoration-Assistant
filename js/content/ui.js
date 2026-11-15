@@ -49,6 +49,7 @@ const TooltipManager = {
     // 建立新內容
     const span = document.createElement("span");
     span.textContent = displayName;
+    span.dataset.rnSpan = "1";
     this.applyTextStyle(target, span, isExpired);
 
     // 點擊複製功能
@@ -71,6 +72,101 @@ const TooltipManager = {
     // 標記完成
     target.dataset.rnReplaced = "yes";
     this.attachData(target, handle, displayName, subs, isExpired);
+  },
+
+  // =======================================================
+  // [模式 1-B] renderDual (雙節點替換，選用)
+  // 用途：不動 YouTube 原本的文字節點，只將它隱藏，並在前方插入獨立的暱稱節點。
+  // 好處：YouTube 重複使用元素或改寫文字時，原節點仍是它自己管理的內容，
+  //       不會被我們清空；換人時只需更新獨立節點，不會殘留上一位的內容。
+  // =======================================================
+  DUAL_CLASS: "rn-restored-name",
+
+  findDualNode: function (target) {
+    const prev = target.previousElementSibling;
+    return prev && prev.classList && prev.classList.contains(this.DUAL_CLASS)
+      ? prev
+      : null;
+  },
+
+  renderDual: function (target, handle, displayName, fullName, subs, isExpired) {
+    if (!target.isConnected || !target.parentNode) return;
+
+    let node = this.findDualNode(target);
+    if (!node) {
+      node = document.createElement("span");
+      node.className = this.DUAL_CLASS;
+      target.parentNode.insertBefore(node, target);
+    }
+
+    // 沿用原生節點的外觀 (擁有者藍色、管理員色、字體等由 YouTube 以 CSS 套在原生節點上)
+    this.copyNativeStyle(target, node);
+
+    node.textContent = "";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = displayName;
+    nameSpan.dataset.rnSpan = "1";
+    this.applyTextStyle(nameSpan, null, isExpired);
+    if (this.canCopy) this.bindCopyEvent(nameSpan, handle);
+    node.appendChild(nameSpan);
+
+    const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
+    const badge = this.getBadgeIcon(numSubs);
+    if (badge) {
+      node.style.display = "inline-flex";
+      node.style.alignItems = "center";
+      node.style.gap = "4px";
+      node.appendChild(badge);
+    } else {
+      node.style.display = "";
+    }
+    this.attachData(node, handle, fullName, subs, isExpired);
+
+    // 隱藏原生節點 (內容保持原樣，仍可被 YouTube 與本工具讀取)
+    target.style.setProperty("display", "none", "important");
+    target.dataset.rnReplaced = "yes";
+    target.dataset.rnDual = "1";
+    if (isExpired) target.dataset.rnExpired = "true";
+    else delete target.dataset.rnExpired;
+  },
+
+  NATIVE_STYLE_PROPS: [
+    "color",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "line-height",
+    "letter-spacing",
+    "text-transform",
+    "background-color",
+    "padding",
+    "border-radius",
+  ],
+
+  // 隱藏原生節點之前，把它的計算後樣式複製到獨立節點
+  copyNativeStyle: function (from, to) {
+    try {
+      const cs = window.getComputedStyle(from);
+      // 原生節點已被隱藏時 (顯示 none) 計算值仍可讀取顏色與字體
+      this.NATIVE_STYLE_PROPS.forEach((prop) => {
+        const v = cs.getPropertyValue(prop);
+        if (v) to.style.setProperty(prop, v);
+      });
+    } catch (e) {
+      // 取不到就沿用繼承樣式
+    }
+  },
+
+  // 還原：移除獨立節點並顯示原生節點 (原生文字不是 handle 時使用)
+  restoreDual: function (target) {
+    const node = this.findDualNode(target);
+    if (node) node.remove();
+    target.style.removeProperty("display");
+    delete target.dataset.rnDual;
+    delete target.dataset.rnReplaced;
+    delete target.dataset.rnExpired;
+    delete target.dataset.rnTargetHandle;
   },
 
   // =======================================================

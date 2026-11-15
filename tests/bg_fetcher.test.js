@@ -172,3 +172,95 @@ test("被導向登入頁視為失敗", async () => {
   assert.equal(result.error, "Redirected to login");
   assert.equal(BgFetcher.consecutiveErrors, 1);
 });
+
+// --- 串流讀取：取得完整 ytInitialData 後提早中斷 ---
+function streamPage(chunks, onPull) {
+  const encoder = new TextEncoder();
+  let i = 0;
+  const state = { pulled: 0, cancelled: false };
+  const body = new ReadableStream({
+    pull(controller) {
+      if (i >= chunks.length) return controller.close();
+      state.pulled++;
+      if (onPull) onPull(i);
+      controller.enqueue(encoder.encode(chunks[i++]));
+    },
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return {
+    state,
+    response: { ok: true, status: 200, url: "https://www.youtube.com/@x", body },
+  };
+}
+
+const channelData = (name, subsText) =>
+  JSON.stringify({
+    header: {
+      pageHeaderRenderer: {
+        content: {
+          pageHeaderViewModel: {
+            title: { dynamicTextViewModel: { text: { content: name } } },
+            metadata: {
+              contentMetadataViewModel: {
+                metadataRows: [
+                  { metadataParts: [{ text: { content: "@x" } }] },
+                  { metadataParts: [{ text: { content: subsText } }] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+test("串流讀取：取得完整 ytInitialData 後中斷，不再讀後面的區塊", async () => {
+  const data = channelData("串流頻道", "1.5萬位訂閱者");
+  const chunks = [
+    `<html><head><meta property="og:title" content="串流頻道"></head><body><script>var ytInitialData = `,
+    data.slice(0, 40),
+    data.slice(40) + ";</script>",
+    "<div>後面很長的頁面內容</div>".repeat(1000),
+    "<div>更多</div>".repeat(1000),
+  ];
+  const { response, state } = streamPage(chunks);
+  reset(() => response);
+  const result = await BgFetcher.fetch("@x");
+  assert.equal(result.success, true);
+  assert.equal(result.nameRaw, "串流頻道");
+  assert.equal(result.subs, 15000);
+  assert.equal(state.cancelled, true);
+  assert.ok(state.pulled < chunks.length, `讀了 ${state.pulled}/${chunks.length} 個區塊`);
+});
+
+test("串流讀取：沒有 ytInitialData 時讀到結尾，以 og:title 解析", async () => {
+  const { response, state } = streamPage([
+    `<meta property="og:title" content="只有標題">`,
+    "<body>沒有資料物件</body>",
+  ]);
+  reset(() => response);
+  const result = await BgFetcher.fetch("@x");
+  assert.equal(result.success, true);
+  assert.equal(result.nameRaw, "只有標題");
+  assert.equal(state.cancelled, false);
+});
+
+test("串流讀取：多位元組字元被切在區塊邊界時不會亂碼", async () => {
+  const data = channelData("中文頻道名稱", "2K subscribers");
+  const bytes = new TextEncoder().encode(
+    `<html><body><script>var ytInitialData = ${data};</script></body></html>`
+  );
+  // 逐 7 個位元組切開，必然切到 UTF-8 字元中間
+  const body = new ReadableStream({
+    start(controller) {
+      for (let i = 0; i < bytes.length; i += 7) controller.enqueue(bytes.slice(i, i + 7));
+      controller.close();
+    },
+  });
+  reset(() => ({ ok: true, status: 200, url: "https://www.youtube.com/@x", body }));
+  const result = await BgFetcher.fetch("@x");
+  assert.equal(result.nameRaw, "中文頻道名稱");
+  assert.equal(result.subs, 2000);
+});
