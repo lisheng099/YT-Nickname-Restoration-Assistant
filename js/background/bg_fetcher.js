@@ -360,7 +360,7 @@ const BgFetcher = {
         return { error: `HTTP ${response.status}`, status: response.status };
       }
 
-      const text = await response.text();
+      const text = await this.readPageText(response, controller);
       const parsed = YTParser.parse(text);
 
       if (parsed)
@@ -373,6 +373,45 @@ const BgFetcher = {
       const offline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       return { error: err.message, offline };
+    }
+  },
+
+  // 讀取頻道頁面 HTML。頻道頁常達數百 KB，但名稱與訂閱數都在 ytInitialData 內，
+  // 一旦取得完整的 ytInitialData 就中斷下載，節省頻寬與記憶體。
+  // 沒有串流介面 (或讀取過程出錯) 時，退回一次讀完整份文字。
+  readPageText: async function (response, controller) {
+    const body = response.body;
+    if (!body || typeof body.getReader !== "function") {
+      return response.text();
+    }
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        if (
+          text.includes("ytInitialData") &&
+          YTParser.extractInitialData(text)
+        ) {
+          // 名稱備援 (og:title) 位於 <head>，一定在 ytInitialData 之前，已經讀到
+          try {
+            await reader.cancel();
+          } catch (e) {
+            // 取消失敗不影響結果
+          }
+          if (controller) controller.abort();
+          return text;
+        }
+      }
+      text += decoder.decode();
+      return text;
+    } catch (err) {
+      // 已經收到足夠內容時直接使用，否則交給外層當作一般錯誤處理
+      if (text && YTParser.extractInitialData(text)) return text;
+      throw err;
     }
   },
 

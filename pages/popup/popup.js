@@ -23,6 +23,7 @@ const readmeBtn = document.getElementById("openReadmeBtn");
 
 // UI 元素參考
 const maxLengthInput = document.getElementById("maxLengthInput");
+const dualNodeInput = document.getElementById("dualNodeInput");
 const clickToCopyInput = document.getElementById("clickToCopyInput");
 const fetchSpeedSelect = document.getElementById("fetchSpeedSelect");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
@@ -93,6 +94,8 @@ function loadSettings() {
         isDebugModeEnabled = DEFAULT_DEBUG_MODE;
       }
 
+      // 雙節點替換預設開啟，只有明確關閉時才停用
+      dualNodeInput.checked = settings.dualNode !== false;
       clickToCopyInput.checked = res[CLICK_TO_COPY_KEY] === true;
       fetchSpeedSelect.value = res[FETCH_SPEED_KEY] || "NORMAL";
 
@@ -209,6 +212,7 @@ saveSettingsBtn.addEventListener("click", () => {
       ttlDays: ttlDays,
       deleteDays: deleteDays,
       debugMode: isDebugMode,
+      dualNode: dualNodeInput.checked,
     };
 
     chrome.storage.local.set(
