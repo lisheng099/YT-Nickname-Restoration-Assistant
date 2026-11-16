@@ -3,16 +3,18 @@
 // ===========================================================
 
 // 1. 引入依賴 (注意順序)
+// 路徑一律寫成 ../<資料夾>/<檔案>：importScripts 以 Service Worker 進入點的位置為基準，
+// 這樣寫可讓放在 js/ 下其他資料夾的進入點 (附加模組) 也能載入本檔。
 try {
   importScripts(
     "../shared/config.js", // 1. 基礎設定 (AppConfig) 必須最先載入
     "../shared/utils.js", // 2. 工具函式 (Logger) 依賴 Config
     "../libs/idb-keyval.js", // 3. 第三方 IndexedDB 庫
     "../shared/viewer_model.js", // 觀眾筆記資料模型
-    "bg_viewers.js", // 觀眾筆記儲存 (依賴 Utils, IDB, ViewerModel)
-    "yt_parser.js", // 4. 解析器
-    "bg_cache.js", // 5. 快取管理器 (依賴 Config, Utils, IDB)
-    "bg_fetcher.js" // 6. 爬蟲管理器 (依賴 Config, Utils, Cache, Parser)
+    "../background/bg_viewers.js", // 觀眾筆記儲存 (依賴 Utils, IDB, ViewerModel)
+    "../background/yt_parser.js", // 4. 解析器
+    "../background/bg_cache.js", // 5. 快取管理器 (依賴 Config, Utils, IDB)
+    "../background/bg_fetcher.js" // 6. 爬蟲管理器 (依賴 Config, Utils, Cache, Parser)
   );
 } catch (e) {
   console.error("[Background] Script Import Error:", e);
