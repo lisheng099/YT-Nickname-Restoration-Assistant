@@ -244,6 +244,14 @@ openBtn.addEventListener("click", () => {
   chrome.tabs.create({ url: "pages/manager/manager.html" });
 });
 
+// 開啟觀眾筆記管理頁
+const viewersBtn = document.getElementById("openViewersBtn");
+if (viewersBtn) {
+  viewersBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: "pages/viewers/viewers.html" });
+  });
+}
+
 // 開啟說明書頁面
 if (manualBtn) {
   manualBtn.addEventListener("click", () => {

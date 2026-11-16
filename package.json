@@ -3,6 +3,8 @@
   "private": true,
   "description": "Development tooling for the extension. The extension itself has no build step.",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.e2e.js",
+    "package": "node scripts/package.js"
   }
 }

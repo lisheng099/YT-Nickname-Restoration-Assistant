@@ -193,6 +193,8 @@ const BgCache = {
       subs: data.subs || 0,
       ts: data.ts || Date.now(),
     };
+    // 頻道 ID (UC...)：有取得時一併保存
+    if (data.cid) cacheItem.cid = data.cid;
 
     // 1. 更新記憶體
     this.setMemory(handle, cacheItem);
