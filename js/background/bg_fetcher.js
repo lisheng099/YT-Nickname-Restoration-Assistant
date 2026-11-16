@@ -270,7 +270,9 @@ const BgFetcher = {
           );
 
           // 寫入 Cache
-          BgCache.set(handle, { name: result.nameRaw, subs: result.subs });
+          const entry = { name: result.nameRaw, subs: result.subs };
+          if (result.channelId) entry.cid = result.channelId;
+          BgCache.set(handle, entry);
           
           // 成功時重置錯誤計數與失敗快取
           this.consecutiveErrors = 0;
@@ -363,8 +365,11 @@ const BgFetcher = {
       const text = await this.readPageText(response, controller);
       const parsed = YTParser.parse(text);
 
-      if (parsed)
-        return { success: true, nameRaw: parsed.nameRaw, subs: parsed.subs };
+      if (parsed) {
+        const ok = { success: true, nameRaw: parsed.nameRaw, subs: parsed.subs };
+        if (parsed.channelId) ok.channelId = parsed.channelId;
+        return ok;
+      }
       
       // 解析失敗 (抓不到資料)
       return { error: "Name not found" };

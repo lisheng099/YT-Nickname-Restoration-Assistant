@@ -8,6 +8,8 @@ try {
     "../shared/config.js", // 1. 基礎設定 (AppConfig) 必須最先載入
     "../shared/utils.js", // 2. 工具函式 (Logger) 依賴 Config
     "../libs/idb-keyval.js", // 3. 第三方 IndexedDB 庫
+    "../shared/viewer_model.js", // 觀眾筆記資料模型
+    "bg_viewers.js", // 觀眾筆記儲存 (依賴 Utils, IDB, ViewerModel)
     "yt_parser.js", // 4. 解析器
     "bg_cache.js", // 5. 快取管理器 (依賴 Config, Utils, IDB)
     "bg_fetcher.js" // 6. 爬蟲管理器 (依賴 Config, Utils, Cache, Parser)
@@ -39,6 +41,11 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // 2. 監聽訊息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // === 觀眾筆記 (標籤、備註、評分、自訂暱稱) ===
+  if (request && typeof request.type === "string" && request.type.startsWith("VN_")) {
+    return BgViewers.handleMessage(request, sendResponse);
+  }
+
   // === 快取查詢 (Async) ===
   if (request.type === "CACHE_GET") {
     handleCacheGet(request.handle, sendResponse);
@@ -77,7 +84,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // === 抓取請求 ===
   if (request.type === "FETCH_CHANNEL_INFO") {
     const tabId = sender.tab ? sender.tab.id : null;
-    BgFetcher.fetch(
+    resolveChannelInfo(
       request.handle,
       request.priority,
       request.refresh,
@@ -95,6 +102,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   BgFetcher.cleanupTab(tabId);
 });
+
+// 附加模組可登記自己的查詢來源 (本體沒有登記任何來源)。
+// 來源回傳 { nameRaw, subs, channelId } 表示查到；{ stop: true } 表示不必再由本機抓取；null 表示交給下一個。
+const RnAddons = { resolvers: [] };
+
+async function resolveChannelInfo(handle, priority, refresh, tabId) {
+  for (const resolver of RnAddons.resolvers) {
+    try {
+      const hit = await resolver(handle);
+      if (hit && hit.nameRaw) {
+        BgCache.set(handle, { name: hit.nameRaw, subs: hit.subs || 0, cid: hit.channelId });
+        return { success: true, nameRaw: hit.nameRaw, subs: hit.subs || 0, channelId: hit.channelId || null };
+      }
+      if (hit && hit.stop) return { error: "Not resolved" };
+    } catch (e) {
+      // 這個來源失敗時交給下一個
+    }
+  }
+  return BgFetcher.fetch(handle, priority, refresh, tabId);
+}
 
 // 3. 核心查詢順序控制
 async function handleCacheGet(handle, sendResponse) {
@@ -117,6 +144,7 @@ async function handleCacheGet(handle, sendResponse) {
       sendResponse({
         name: result.nameRaw,
         subs: result.subs,
+        cid: result.channelId || undefined,
         ts: Date.now(), // 剛抓到的資料；前台以 ts 判斷是否過期
       });
     } else {
@@ -138,3 +166,4 @@ async function handleCacheGet(handle, sendResponse) {
 
 // 4. 初始化
 BgCache.init();
+BgViewers.ready();
