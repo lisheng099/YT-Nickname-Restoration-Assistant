@@ -9,6 +9,7 @@ const ViewerNotes = {
   SETTINGS_KEY: "yt_viewer_notes_settings",
   REV_KEY: "yt_viewer_notes_rev",
   BOX_CLASS: "rn-vn-box",
+  AVATAR_ATTR: "data-rn-vn-avatar",
   PANEL_ID: "rn-vn-panel",
   HOSTS: [
     "yt-live-chat-text-message-renderer",
@@ -42,6 +43,7 @@ const ViewerNotes = {
   dockTimer: null,
   recent: [], // 最近發言且有筆記的觀眾 (新的在前)
   MAX_RECENT: 8,
+  avatarHandler: null,
 
   init: function () {
     if (!location.pathname.startsWith("/live_chat")) return;
@@ -86,6 +88,7 @@ const ViewerNotes = {
     if (this.started || !document.body) return;
     this.started = true;
     this.injectStyle();
+    this.bindAvatar();
     this.scan(document.body);
     this.renderDock();
     this.observer = new MutationObserver((mutations) => this.onMutations(mutations));
@@ -107,7 +110,12 @@ const ViewerNotes = {
     if (this.dock) this.dock.remove();
     this.dock = null;
     this.recent = [];
+    if (this.avatarHandler) {
+      ["click", "keydown"].forEach((type) => document.removeEventListener(type, this.avatarHandler, true));
+      this.avatarHandler = null;
+    }
     document.querySelectorAll("." + this.BOX_CLASS).forEach((n) => n.remove());
+    document.querySelectorAll("[" + this.AVATAR_ATTR + "]").forEach((a) => this.releaseAvatar(a));
     document.querySelectorAll("[data-rn-vn-key]").forEach((host) => {
       delete host.dataset.rnVnKey;
       delete host.dataset.rnVnRev;
@@ -121,6 +129,7 @@ const ViewerNotes = {
     const style = document.createElement("style");
     style.id = "rn-vn-style";
     const hover = this.HOSTS.map((h) => `${h}:hover .rn-vn-edit`).join(",");
+    const avatarHover = this.HOSTS.map((h) => `${h}:hover [${this.AVATAR_ATTR}]::after`).join(",");
     style.textContent = `
 [data-rn-vn-custom="1"] #author-name,[data-rn-vn-custom="1"] .rn-restored-name{display:none !important}
 .rn-vn-box{display:inline-flex;flex-wrap:wrap;align-items:center;gap:3px;margin:0 4px 0 0;vertical-align:middle}
@@ -133,6 +142,10 @@ const ViewerNotes = {
 .rn-vn-edit{all:unset;cursor:pointer;font-size:12px;line-height:16px;padding:0 3px;border-radius:4px;opacity:0;transition:opacity .1s}
 .rn-vn-edit:focus-visible{opacity:1;outline:1px solid currentColor}
 ${hover}{opacity:.75}
+[${this.AVATAR_ATTR}]{cursor:pointer;position:relative}
+[${this.AVATAR_ATTR}]::after{content:"✎";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:13px;background:rgba(0,0,0,.55);color:#fff;opacity:0;transition:opacity .1s;pointer-events:none}
+[${this.AVATAR_ATTR}]:focus-visible{outline:2px solid #3ea6ff;outline-offset:1px;border-radius:50%}
+${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 #rn-vn-panel{position:fixed;z-index:2147483646;width:280px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;box-sizing:border-box;padding:10px 12px;border-radius:10px;font:13px/1.5 Roboto,Arial,sans-serif;background:#fff;color:#222;border:1px solid rgba(0,0,0,.15);box-shadow:0 8px 28px rgba(0,0,0,.3)}
 #rn-vn-panel.rn-vn-dark{background:#212121;color:#eee;border-color:rgba(255,255,255,.15)}
 #rn-vn-panel h4{margin:8px 0 4px;font-size:12px;font-weight:600;opacity:.75}
@@ -319,6 +332,7 @@ ${hover}{opacity:.75}
   // ---------------------------------------------------------------- 顯示
   clearHost: function (host) {
     host.querySelectorAll("." + this.BOX_CLASS).forEach((n) => n.remove());
+    host.querySelectorAll("[" + this.AVATAR_ATTR + "]").forEach((a) => this.releaseAvatar(a));
     host.removeAttribute("data-rn-vn-custom");
     delete host.dataset.rnVnKey;
     delete host.dataset.rnVnRev;
@@ -407,21 +421,59 @@ ${hover}{opacity:.75}
       }
     }
 
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "rn-vn-edit";
-    edit.textContent = "✎";
-    edit.title = this.t("vn_edit");
-    edit.setAttribute("aria-label", this.t("vn_edit"));
-    edit.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.openPanel({ ...this.plain(identity), name: identity.name, idKey: identity.idKey }, edit);
-    });
-    box.appendChild(edit);
+    // 編輯入口：點頭像 (滑過訊息時頭像上會出現 ✎)；找不到頭像時才在名稱旁放 ✎ 按鈕
+    const avatar = this.avatarOf(host);
+    if (avatar) {
+      if (!avatar.hasAttribute(this.AVATAR_ATTR)) {
+        avatar.setAttribute(this.AVATAR_ATTR, "1");
+        avatar.setAttribute("tabindex", "0");
+        avatar.setAttribute("role", "button");
+      }
+      avatar.title = this.t("vn_edit");
+      avatar.setAttribute("aria-label", this.t("vn_edit"));
+    } else {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "rn-vn-edit";
+      edit.textContent = "✎";
+      edit.title = this.t("vn_edit");
+      edit.setAttribute("aria-label", this.t("vn_edit"));
+      edit.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openPanel({ ...this.plain(identity), name: identity.name, idKey: identity.idKey }, edit);
+      });
+      box.appendChild(edit);
+    }
 
     host.dataset.rnVnKey = identity.idKey;
     host.dataset.rnVnRev = String(this.rev);
+  },
+
+  avatarOf: function (host) {
+    const avatar = host.querySelector("#author-photo");
+    return avatar && avatar.closest(this.hostSelector) === host ? avatar : null;
+  },
+
+  releaseAvatar: function (avatar) {
+    ["tabindex", "role", "title", "aria-label", this.AVATAR_ATTR].forEach((a) => avatar.removeAttribute(a));
+  },
+
+  // 用委派監聽頭像的點擊：YouTube 會把同一個訊息元素重複用給其他觀眾，點下去時才判斷是誰
+  bindAvatar: function () {
+    if (this.avatarHandler) return;
+    this.avatarHandler = (e) => {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      const avatar = e.target && e.target.closest && e.target.closest("[" + this.AVATAR_ATTR + "]");
+      if (!avatar) return;
+      const host = avatar.closest(this.hostSelector);
+      const identity = host && this.identityOf(host);
+      if (!identity) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.openPanel({ ...this.plain(identity), name: identity.name, idKey: identity.idKey }, avatar);
+    };
+    ["click", "keydown"].forEach((type) => document.addEventListener(type, this.avatarHandler, true));
   },
 
   t: function (key, params) {
@@ -588,7 +640,7 @@ ${hover}{opacity:.75}
         document.addEventListener(
           "mousedown",
           (e) => {
-            if (this.panel && !this.panel.contains(e.target) && !(e.target.closest && e.target.closest(".rn-vn-edit"))) {
+            if (this.panel && !this.panel.contains(e.target) && !(e.target.closest && e.target.closest(".rn-vn-edit, [" + this.AVATAR_ATTR + "]"))) {
               this.closePanel();
             }
           },

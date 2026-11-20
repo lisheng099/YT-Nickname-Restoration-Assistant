@@ -17,14 +17,17 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
 
   // 探針把頻道 ID 寫到屬性上
   await page.waitForSelector(`#m1[data-rn-cid="${UC("a")}"]`);
-  // 每則訊息都有編輯按鈕
-  const edit = page.locator("#m1 .rn-vn-edit");
-  await edit.waitFor({ state: "attached" });
+  // 點頭像開啟編輯面板；有頭像時名稱旁不再放 ✎ 按鈕
+  const avatar = page.locator("#m1 #author-photo");
+  await page.waitForSelector("#m1 #author-photo[data-rn-vn-avatar]");
+  assert.equal(await page.locator("#m1 .rn-vn-edit").count(), 0);
   await page.locator("#m1").hover();
-  await edit.click();
+  await avatar.click();
   const panel = page.locator("#rn-vn-panel");
   await panel.waitFor();
   assert.match(await panel.locator(".rn-vn-sub").textContent(), /@ming · UCa+/);
+  // YouTube 頭像原本的點擊處理不會被觸發
+  assert.equal(await page.evaluate(() => window.nativeAvatarClicks || 0), 0);
 
   // 自訂暱稱
   await panel.locator('[data-rn-vn-field="nick"]').fill("小明");
@@ -63,6 +66,22 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
   await page.waitForFunction(() => /1\. 小明/.test(document.querySelector("#rn-vn-dock .rn-vn-dock-body")?.textContent || ""));
   if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "local-dock.png") });
   await page.locator("#rn-vn-dock [role=tab]").nth(0).click();
+
+  // 鍵盤也能從頭像開啟另一位觀眾的面板
+  await page.locator("#m2 #author-photo").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => /@other/.test(document.querySelector("#rn-vn-panel .rn-vn-sub")?.textContent || ""));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.querySelector("#rn-vn-panel"));
+
+  // 找不到頭像的訊息退回在名稱旁放 ✎ 按鈕
+  await page.evaluate(() => window.addChat("m5", "@nophoto", "UC" + "x".repeat(22), "沒有頭像", null, true));
+  const fallback = page.locator("#m5 .rn-vn-edit");
+  await fallback.waitFor({ state: "attached" });
+  await page.locator("#m5").hover();
+  await fallback.click();
+  await page.waitForFunction(() => /@nophoto/.test(document.querySelector("#rn-vn-panel .rn-vn-sub")?.textContent || ""));
+  await page.keyboard.press("Escape");
 
   // 另一位觀眾不受影響
   assert.equal(await page.locator("#m2 .rn-vn-chip").count(), 0);
