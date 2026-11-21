@@ -409,68 +409,74 @@ const TooltipManager = {
 
   show: function (e, target) {
     if (!this.tooltipEl) this.createTooltipElement();
-    this.updateTheme();
 
     const name = target.dataset.rnName || I18n.t("loading");
     const handle = target.dataset.rnHandle || "";
     const subs = parseInt(target.dataset.rnSubs || "0");
     const isExpired = target.dataset.rnExpired === "true";
+    const renderKey = `${name}|${handle}|${subs}|${isExpired}`;
 
-    this.tooltipEl.replaceChildren();
+    if (this._lastTarget !== target || this._lastKey !== renderKey) {
+      this._lastTarget = target;
+      this._lastKey = renderKey;
+      this.updateTheme();
+      this.tooltipEl.replaceChildren();
 
-    const nameDiv = document.createElement("div");
-    Object.assign(nameDiv.style, {
-      fontWeight: "600",
-      fontSize: "1.1em",
-      marginBottom: "2px",
-    });
-    nameDiv.textContent = name;
-    this.tooltipEl.appendChild(nameDiv);
-
-    if (handle) {
-      const handleDiv = document.createElement("div");
-      Object.assign(handleDiv.style, {
-        color: "inherit",
-        opacity: "0.7",
-        fontSize: "0.9em",
-        fontFamily: "monospace",
+      const nameDiv = document.createElement("div");
+      Object.assign(nameDiv.style, {
+        fontWeight: "600",
+        fontSize: "1.1em",
+        marginBottom: "2px",
       });
-      handleDiv.textContent = handle;
-      this.tooltipEl.appendChild(handleDiv);
+      nameDiv.textContent = name;
+      this.tooltipEl.appendChild(nameDiv);
+
+      if (handle) {
+        const handleDiv = document.createElement("div");
+        Object.assign(handleDiv.style, {
+          color: "inherit",
+          opacity: "0.7",
+          fontSize: "0.9em",
+          fontFamily: "monospace",
+        });
+        handleDiv.textContent = handle;
+        this.tooltipEl.appendChild(handleDiv);
+      }
+
+      if (subs > 0) {
+        const subsDiv = document.createElement("div");
+        Object.assign(subsDiv.style, {
+          marginTop: "6px",
+          fontSize: "0.85em",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        });
+        const iconSpan = document.createElement("span");
+        iconSpan.textContent = "👥";
+        const textSpan = document.createElement("span");
+        textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
+        subsDiv.appendChild(iconSpan);
+        subsDiv.appendChild(textSpan);
+        this.tooltipEl.appendChild(subsDiv);
+      }
+
+      if (isExpired) {
+        const expDiv = document.createElement("div");
+        Object.assign(expDiv.style, {
+          marginTop: "6px",
+          paddingTop: "4px",
+          borderTop: "1px dashed rgba(128,128,128,0.3)",
+          color: "#ffab91",
+          fontSize: "0.85em",
+        });
+        expDiv.textContent = I18n.t("data_expired");
+        this.tooltipEl.appendChild(expDiv);
+      }
+      this._lastRect = this.tooltipEl.getBoundingClientRect();
     }
 
-    if (subs > 0) {
-      const subsDiv = document.createElement("div");
-      Object.assign(subsDiv.style, {
-        marginTop: "6px",
-        fontSize: "0.85em",
-        display: "flex",
-        alignItems: "center",
-        gap: "4px",
-      });
-      const iconSpan = document.createElement("span");
-      iconSpan.textContent = "👥";
-      const textSpan = document.createElement("span");
-      textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
-      subsDiv.appendChild(iconSpan);
-      subsDiv.appendChild(textSpan);
-      this.tooltipEl.appendChild(subsDiv);
-    }
-
-    if (isExpired) {
-      const expDiv = document.createElement("div");
-      Object.assign(expDiv.style, {
-        marginTop: "6px",
-        paddingTop: "4px",
-        borderTop: "1px dashed rgba(128,128,128,0.3)",
-        color: "#ffab91",
-        fontSize: "0.85em",
-      });
-      expDiv.textContent = I18n.t("data_expired");
-      this.tooltipEl.appendChild(expDiv);
-    }
-
-    const rect = this.tooltipEl.getBoundingClientRect();
+    const rect = this._lastRect || this.tooltipEl.getBoundingClientRect();
     const x = Math.min(e.clientX + 15, window.innerWidth - rect.width - 15);
     const y = Math.min(e.clientY + 15, window.innerHeight - rect.height - 15);
     this.tooltipEl.style.left = `${x}px`;

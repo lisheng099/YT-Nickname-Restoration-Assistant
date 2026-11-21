@@ -137,7 +137,7 @@ const ViewerNotes = {
     const hover = this.HOSTS.map((h) => `${h}:hover .rn-vn-edit`).join(",");
     const avatarHover = this.HOSTS.map((h) => `${h}:hover [${this.AVATAR_ATTR}]::after`).join(",");
     style.textContent = `
-[data-rn-vn-custom="1"] #author-name,[data-rn-vn-custom="1"] .rn-restored-name{display:none !important}
+[data-rn-vn-custom="1"] #author-name,[data-rn-vn-custom="1"] .rn-restored-name [data-rn-span]{display:none !important}
 .rn-vn-box{display:inline-flex;flex-wrap:wrap;align-items:center;gap:3px;margin:0 4px 0 0;vertical-align:middle}
 .rn-vn-box:empty{display:none}
 .rn-vn-name{margin-right:2px}

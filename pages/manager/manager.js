@@ -417,14 +417,20 @@ els.nextBtn.onclick = () => {
   renderData();
 };
 
-// 自動重新整理 (可選)
+// 自動重新整理（分頁隱藏時暫停，避免背景空轉）
 setInterval(() => {
+  if (document.hidden) return;
   const isModalOpen = els.modal.classList.contains("active");
   const hasChecks = document.querySelectorAll(".row-check:checked").length > 0;
   if (!isModalOpen && !hasChecks) {
     loadData();
   }
-}, 5000);
+}, 15000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !els.modal.classList.contains("active")) {
+    loadData();
+  }
+});
 
 // 初始化流程
 I18n.init().then(() => {
