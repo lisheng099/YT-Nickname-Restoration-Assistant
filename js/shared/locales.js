@@ -206,7 +206,7 @@ const I18nLocales = {
     manual_fuse_action_desc: "當您在擴充功能選單中看到紅色的「已熔斷」警告時，您可以嘗試點擊按鈕手動重置。如果重置後馬上又熔斷，代表問題尚未解決（通常是 YouTube 改版了），請保持關閉並等待作者發布新版本修復。",
 
     // Viewer notes
-    open_viewers: "🏷️ 觀眾筆記管理 (標籤、評分)",
+    open_viewers: "🏷️ 觀眾筆記管理 (標籤、反應)",
     vn_edit: "編輯",
     vn_close: "關閉",
     vn_nickname: "自訂暱稱",
@@ -730,7 +730,7 @@ const I18nLocales = {
     manual_fuse_action_desc: "When you see a red 'Tripped' warning in the extension menu, you can try clicking the button to manually reset it. If it trips again immediately, the issue is likely unresolved (usually a YouTube update). Please keep it off and wait for the author to release a new version.",
 
     // Viewer notes
-    open_viewers: "🏷️ Viewer notes (tags, scores)",
+    open_viewers: "🏷️ Viewer notes (tags, reactions)",
     vn_edit: "Edit",
     vn_close: "Close",
     vn_nickname: "Custom nickname",

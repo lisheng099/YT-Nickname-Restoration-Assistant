@@ -145,11 +145,10 @@ const BgViewers = {
     await this.ready();
     return this.index
       .list()
-      .filter((r) => ViewerModel.totalReactions(r) > 0 || r.score > 0)
+      .filter((r) => ViewerModel.totalReactions(r) > 0)
       .sort(
         (a, b) =>
           ViewerModel.totalReactions(b) - ViewerModel.totalReactions(a) ||
-          b.score - a.score ||
           b.updatedAt - a.updatedAt
       )
       .slice(0, Math.max(1, Math.min(50, limit || 10)));

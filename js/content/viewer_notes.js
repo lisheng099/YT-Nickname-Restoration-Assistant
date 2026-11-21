@@ -143,8 +143,6 @@ const ViewerNotes = {
 .rn-vn-name{margin-right:2px}
 .rn-vn-chip{display:inline-block;padding:0 5px;border-radius:8px;font-size:11px;line-height:16px;font-weight:500;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;background:rgba(128,128,128,.25);color:inherit}
 .rn-vn-chip.rn-vn-ext{border:1px dashed rgba(128,128,128,.7)}
-.rn-vn-score{background:#ffe082;color:#111}
-.rn-vn-score.rn-vn-neg{background:#ef9a9a}
 .rn-vn-edit{all:unset;cursor:pointer;font-size:12px;line-height:16px;padding:0 3px;border-radius:4px;opacity:0;transition:opacity .1s}
 .rn-vn-edit:focus-visible{opacity:1;outline:1px solid currentColor}
 ${hover}{opacity:.75}
@@ -168,7 +166,6 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 #rn-vn-panel .rn-vn-note{display:flex;gap:6px;align-items:flex-start;margin-bottom:3px}
 #rn-vn-panel .rn-vn-note span{flex:1;word-break:break-word}
 #rn-vn-panel input[type=color]{width:28px;height:24px;padding:0;border:none;background:none}
-#rn-vn-panel .rn-vn-scoreval{min-width:36px;text-align:center;font-weight:600}
 #rn-vn-panel .rn-vn-reactions{display:flex;flex-wrap:wrap;gap:5px}
 #rn-vn-panel .rn-vn-react-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:13px;line-height:1.3;user-select:none}
 #rn-vn-panel .rn-vn-react-btn[data-active="1"]{background:rgba(128,128,128,.22);font-weight:600}
@@ -549,14 +546,6 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
           const d = this.reactionDisplay(k);
           box.appendChild(this.reactionChip(d.icon, d.label, cnt, `${this.t("vn_reactions")}: ${summary}`));
         });
-      } else if (record.score !== 0) {
-        const score = this.chip(
-          (record.score > 0 ? "+" : "") + record.score,
-          "",
-          "rn-vn-score" + (record.score < 0 ? " rn-vn-neg" : "")
-        );
-        score.title = this.t("vn_score");
-        box.appendChild(score);
       }
     }
     this.harvestEmotes(host);
@@ -728,10 +717,6 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
           const d = this.reactionDisplay(k);
           head.appendChild(this.reactionChip(d.icon, d.label, cnt, `${d.label} ${cnt}`));
         });
-      } else if (record.score !== 0) {
-        head.appendChild(
-          this.chip((record.score > 0 ? "+" : "") + record.score, "", "rn-vn-score" + (record.score < 0 ? " rn-vn-neg" : ""))
-        );
       }
       record.tagIds.forEach((id) => {
         const def = defs.get(id);
