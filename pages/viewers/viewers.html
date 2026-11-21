@@ -142,9 +142,13 @@
       </div>
       <div id="reactionDefs"></div>
       <div class="tagdef">
-        <input type="text" id="newReactionIcon" maxlength="8" style="flex: 0 0 120px" data-i18n-placeholder="vnm_reaction_icon_ph" placeholder="視窗顯示 (如 冷)" />
+        <input type="text" id="newReactionIcon" maxlength="300" style="flex: 0 0 150px" data-i18n-placeholder="vnm_reaction_icon_ph" placeholder="視窗顯示 (文字/貼圖網址)" />
         <input type="text" id="newReactionLabel" maxlength="20" data-i18n-placeholder="vnm_reaction_label_ph" placeholder="後台詞語 (如 冷笑話)" />
         <button id="addReaction" data-i18n="vn_add">新增</button>
+      </div>
+      <div id="channelEmotesWrap" hidden style="margin-top: 8px">
+        <div class="muted" style="font-size: 12px; margin-bottom: 4px" data-i18n="vnm_channel_emotes">聊天室偵測到的頻道貼圖（點選帶入）：</div>
+        <div class="row" id="channelEmotes" style="gap: 4px"></div>
       </div>
     </div>
 

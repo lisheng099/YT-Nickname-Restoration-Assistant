@@ -174,7 +174,9 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 #rn-vn-panel .rn-vn-react-btn[aria-pressed="true"]{background:rgba(62,166,255,.28);border-color:#3ea6ff;outline:1.5px solid #3ea6ff;font-weight:700}
 #rn-vn-panel .rn-vn-react-cnt{font-size:11px;font-variant-numeric:tabular-nums;opacity:.9}
 #rn-vn-panel .rn-vn-hint{font-size:11px;opacity:.65;margin-top:4px}
-.rn-vn-react-chip{background:rgba(62,166,255,.18);color:inherit}
+.rn-vn-react-chip{display:inline-flex;align-items:center;gap:2px;background:rgba(62,166,255,.18);color:inherit}
+.rn-vn-react-img{width:16px;height:16px;object-fit:contain;vertical-align:middle;border-radius:2px}
+#rn-vn-panel .rn-vn-react-img{width:18px;height:18px}
 #rn-vn-dock{position:fixed;right:8px;bottom:64px;z-index:2147483645;font:12px/1.45 Roboto,Arial,sans-serif;color:#222}
 #rn-vn-dock.rn-vn-dark{color:#eee}
 #rn-vn-dock button{all:unset;cursor:pointer;box-sizing:border-box}
@@ -346,6 +348,64 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     return def ? { icon: def.icon, label: def.label } : { icon: key, label: key };
   },
 
+  reactionIconNode: function (icon, label) {
+    if (ViewerModel.isImageIcon(icon)) {
+      const img = document.createElement("img");
+      img.className = "rn-vn-react-img";
+      img.src = icon;
+      img.alt = label || "";
+      img.loading = "lazy";
+      return img;
+    }
+    const span = document.createElement("span");
+    span.textContent = icon;
+    return span;
+  },
+
+  reactionChip: function (icon, label, cnt, title) {
+    const el = document.createElement("span");
+    el.className = "rn-vn-chip rn-vn-react-chip";
+    el.appendChild(this.reactionIconNode(icon, label));
+    const num = document.createElement("span");
+    num.textContent = String(cnt);
+    el.appendChild(num);
+    if (title) el.title = title;
+    return el;
+  },
+
+  // 被動收集聊天室出現的 YouTube 頻道自訂貼圖 (yt3.ggpht.com)，供管理頁「反應項目設定」一鍵挑選
+  seenEmotes: new Map(),
+  emoteSaveTimer: null,
+  harvestEmotes: function (host) {
+    const imgs = host.querySelectorAll('img.emoji[src*="yt3.ggpht.com"], img[src*="yt3.ggpht.com/"]');
+    let changed = false;
+    for (const img of imgs) {
+      if (img.closest("#author-photo")) continue;
+      const src = (img.getAttribute("src") || "").trim();
+      const alt = (img.getAttribute("alt") || img.getAttribute("shared-tooltip-text") || "").replace(/^:|:$/g, "").trim();
+      if (!ViewerModel.isImageIcon(src) || this.seenEmotes.has(src)) continue;
+      this.seenEmotes.set(src, alt.slice(0, ViewerModel.LIMITS.REACTION_LABEL));
+      changed = true;
+    }
+    if (!changed || this.emoteSaveTimer) return;
+    this.emoteSaveTimer = setTimeout(() => {
+      this.emoteSaveTimer = null;
+      try {
+        chrome.storage.local.get("yt_channel_emotes", (res) => {
+          const existing = Array.isArray(res.yt_channel_emotes) ? res.yt_channel_emotes : [];
+          const map = new Map(existing.map((e) => [e.src, e.alt || ""]));
+          for (const [src, alt] of this.seenEmotes.entries()) {
+            if (!map.has(src) || (alt && !map.get(src))) map.set(src, alt);
+          }
+          const list = [...map.entries()].slice(-60).map(([src, alt]) => ({ src, alt }));
+          chrome.storage.local.set({ yt_channel_emotes: list });
+        });
+      } catch (e) {
+        // ignore storage errors
+      }
+    }, 2000);
+  },
+
   plain: function (identity) {
     return { channelId: identity.channelId, handle: identity.handle, rawHandle: identity.rawHandle };
   },
@@ -449,9 +509,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
           .join("  ");
         reactionEntries.slice(0, 3).forEach(([k, cnt]) => {
           const d = this.reactionDisplay(k);
-          const rChip = this.chip(`${d.icon} ${cnt}`, "", "rn-vn-react-chip");
-          rChip.title = `${this.t("vn_reactions")}: ${summary}`;
-          box.appendChild(rChip);
+          box.appendChild(this.reactionChip(d.icon, d.label, cnt, `${this.t("vn_reactions")}: ${summary}`));
         });
       } else if (record.score !== 0) {
         const score = this.chip(
@@ -462,12 +520,8 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
         score.title = this.t("vn_score");
         box.appendChild(score);
       }
-      if (record.notes.length > 0) {
-        const note = this.chip("📌" + (record.notes.length > 1 ? record.notes.length : ""), "", "rn-vn-notechip");
-        note.title = record.notes.join("\n");
-        box.appendChild(note);
-      }
     }
+    this.harvestEmotes(host);
 
     // 編輯入口：點頭像 (滑過訊息時頭像上會出現 ✎)；找不到頭像時才在名稱旁放 ✎ 按鈕
     const avatar = this.avatarOf(host);
@@ -634,9 +688,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       if (dockReactions.length > 0) {
         dockReactions.slice(0, 4).forEach(([k, cnt]) => {
           const d = this.reactionDisplay(k);
-          const c = this.chip(`${d.icon} ${cnt}`, "", "rn-vn-react-chip");
-          c.title = `${d.label} ${cnt}`;
-          head.appendChild(c);
+          head.appendChild(this.reactionChip(d.icon, d.label, cnt, `${d.label} ${cnt}`));
         });
       } else if (record.score !== 0) {
         head.appendChild(
@@ -784,7 +836,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       b.dataset.active = cnt > 0 ? "1" : "0";
       b.setAttribute("aria-pressed", selected ? "true" : "false");
       b.title = def.label !== def.icon ? `${def.label}（${this.t("vn_reactions_msg_hint")}）` : this.t("vn_reactions_msg_hint");
-      b.appendChild(el("span", "", def.icon));
+      b.appendChild(this.reactionIconNode(def.icon, def.label));
       if (cnt > 0) b.appendChild(el("span", "rn-vn-react-cnt", String(cnt)));
       b.addEventListener("click", () => {
         if (activeMsgKey) {

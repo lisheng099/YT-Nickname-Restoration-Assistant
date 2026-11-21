@@ -16,6 +16,23 @@ function reactionDisplay(key) {
   return def ? { icon: def.icon, label: def.label } : { icon: key, label: key };
 }
 
+function reactionIconNode(icon, label) {
+  if (ViewerModel.isImageIcon(icon)) {
+    const img = document.createElement("img");
+    img.src = icon;
+    img.alt = label || "";
+    img.style.width = "16px";
+    img.style.height = "16px";
+    img.style.objectFit = "contain";
+    img.style.verticalAlign = "middle";
+    img.style.marginRight = "4px";
+    return img;
+  }
+  const span = document.createElement("span");
+  span.textContent = icon + " ";
+  return span;
+}
+
 function send(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -130,8 +147,15 @@ function renderRows() {
     if (entries.length > 0) {
       entries.forEach(([k, cnt]) => {
         const d = reactionDisplay(k);
-        const text = d.label !== d.icon ? `${d.icon} ${d.label} ${cnt}` : `${d.label} ${cnt}`;
-        reactCell.appendChild(chip(text));
+        const el = document.createElement("span");
+        el.className = "chip";
+        if (ViewerModel.isImageIcon(d.icon)) {
+          el.appendChild(reactionIconNode(d.icon, d.label));
+          el.appendChild(document.createTextNode(`${d.label} ${cnt}`));
+        } else {
+          el.textContent = d.label !== d.icon ? `${d.icon} ${d.label} ${cnt}` : `${d.label} ${cnt}`;
+        }
+        reactCell.appendChild(el);
       });
     } else if (v.score !== 0) {
       reactCell.textContent = v.score > 0 ? "+" + v.score : String(v.score);
@@ -232,11 +256,18 @@ function renderReactionDefs() {
   state.reactionDefs.forEach((def) => {
     const row = document.createElement("div");
     row.className = "tagdef";
+    if (ViewerModel.isImageIcon(def.icon)) {
+      const preview = reactionIconNode(def.icon, def.label);
+      preview.style.width = "22px";
+      preview.style.height = "22px";
+      preview.style.flexShrink = "0";
+      row.appendChild(preview);
+    }
     const icon = document.createElement("input");
     icon.type = "text";
     icon.maxLength = ViewerModel.LIMITS.REACTION_ICON;
     icon.value = def.icon;
-    icon.style.flex = "0 0 120px";
+    icon.style.flex = "0 0 150px";
     icon.setAttribute("aria-label", I18n.t("vnm_reaction_icon_ph"));
     const label = document.createElement("input");
     label.type = "text";
@@ -263,6 +294,35 @@ function renderReactionDefs() {
   });
 }
 
+function renderChannelEmotes(list) {
+  const wrap = $("channelEmotesWrap");
+  const box = $("channelEmotes");
+  if (!wrap || !box) return;
+  const emotes = Array.isArray(list) ? list.filter((e) => e && ViewerModel.isImageIcon(e.src)) : [];
+  wrap.hidden = emotes.length === 0;
+  box.replaceChildren();
+  emotes.forEach((em) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.style.padding = "3px 6px";
+    b.title = em.alt || em.src;
+    const img = document.createElement("img");
+    img.src = em.src;
+    img.alt = em.alt || "";
+    img.style.width = "20px";
+    img.style.height = "20px";
+    img.style.objectFit = "contain";
+    img.style.verticalAlign = "middle";
+    b.appendChild(img);
+    b.addEventListener("click", () => {
+      $("newReactionIcon").value = em.src;
+      if (!$("newReactionLabel").value.trim() && em.alt) $("newReactionLabel").value = em.alt;
+      $("newReactionLabel").focus();
+    });
+    box.appendChild(b);
+  });
+}
+
 async function reload() {
   try {
     const data = await send({ type: "VN_LIST" });
@@ -272,6 +332,7 @@ async function reload() {
     renderRows();
     renderReactionDefs();
     renderTagDefs();
+    chrome.storage.local.get("yt_channel_emotes", (res) => renderChannelEmotes(res.yt_channel_emotes));
   } catch (e) {
     setStatus(I18n.t("vnm_unavailable"));
   }
@@ -293,8 +354,13 @@ function renderEditorReactions() {
       btn.style.fontWeight = "600";
     }
     btn.title = I18n.t("vn_reactions_hint");
-    const caption = def.label !== def.icon ? `${def.icon} ${def.label}` : def.label;
-    btn.textContent = cnt > 0 ? `${caption} ${cnt}` : caption;
+    if (ViewerModel.isImageIcon(def.icon)) {
+      btn.appendChild(reactionIconNode(def.icon, def.label));
+      btn.appendChild(document.createTextNode(cnt > 0 ? `${def.label} ${cnt}` : def.label));
+    } else {
+      const caption = def.label !== def.icon ? `${def.icon} ${def.label}` : def.label;
+      btn.textContent = cnt > 0 ? `${caption} ${cnt}` : caption;
+    }
     btn.addEventListener("click", () => {
       editingReactions[def.id] = (editingReactions[def.id] || 0) + 1;
       renderEditorReactions();

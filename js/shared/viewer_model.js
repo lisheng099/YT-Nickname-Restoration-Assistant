@@ -31,11 +31,14 @@
     REACTIONS_PER_VIEWER: 30,
     REACTION_DEFS: 30,
     REACTION_KEY: 40,
-    REACTION_ICON: 8,
+    REACTION_ICON: 300,
     REACTION_LABEL: 20,
     VIEWERS: 50000,
     EXT_TAGS: 20,
   };
+
+  const IMAGE_ICON = /^https:\/\/[a-z0-9.-]+\//i;
+  const isImageIcon = (value) => typeof value === "string" && IMAGE_ICON.test(value.trim());
 
   const text = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
@@ -528,6 +531,7 @@
     normalizeTagDefs,
     normalizeReactionDefs,
     defaultReactionDefs,
+    isImageIcon,
     normalizeReactions,
     totalReactions,
     normalizeExt,
