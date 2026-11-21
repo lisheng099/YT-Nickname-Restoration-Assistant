@@ -107,7 +107,7 @@
         <input type="search" id="search" data-i18n-placeholder="vnm_search_ph" placeholder="搜尋暱稱、@ID、標籤或備註" />
         <select id="sort" aria-label="sort">
           <option value="updated" data-i18n="vnm_sort_updated">最近更新</option>
-          <option value="score" data-i18n="vnm_sort_score">評分高到低</option>
+          <option value="score" data-i18n="vnm_sort_reactions">表情次數高到低</option>
           <option value="name" data-i18n="vnm_sort_name">名稱</option>
         </select>
         <button id="addViewer" class="primary" data-i18n="vnm_add_viewer">新增觀眾</button>
@@ -119,7 +119,7 @@
             <tr>
               <th data-i18n="vnm_col_viewer">觀眾</th>
               <th data-i18n="vnm_col_tags">標籤</th>
-              <th class="num" data-i18n="vnm_col_score">評分</th>
+              <th data-i18n="vnm_col_reactions">表情統計</th>
               <th data-i18n="vnm_col_notes">備註</th>
               <th data-i18n="vnm_col_action">操作</th>
             </tr>
@@ -166,8 +166,14 @@
         </div>
         <label for="edNick" data-i18n="vn_nickname">自訂暱稱</label>
         <input type="text" id="edNick" maxlength="50" />
-        <label for="edScore" data-i18n="vn_score">評分</label>
-        <input type="number" id="edScore" step="1" />
+        <label data-i18n="vn_reactions">表情統計</label>
+        <div class="row" id="edReactions" style="margin-bottom: 6px"></div>
+        <div class="row" style="margin-bottom: 4px">
+          <input type="text" id="edReactionAdd" maxlength="16" style="flex: 1; min-width: 0" data-i18n-placeholder="vn_reaction_add_ph" placeholder="自訂表情（如 ❤️）" />
+          <button type="button" id="edReactionAddBtn">+1</button>
+          <button type="button" id="edReactionReset" data-i18n="vn_score_reset">歸零</button>
+        </div>
+        <div class="muted" style="font-size: 11px" data-i18n="vn_reactions_hint">左鍵 +1，右鍵 -1</div>
         <label data-i18n="vn_tags">標籤</label>
         <div class="checks" id="edTags"></div>
         <label for="edNotes" data-i18n="vnm_field_notes">備註 (每行一則)</label>

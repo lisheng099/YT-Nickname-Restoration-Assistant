@@ -65,9 +65,18 @@ function filtered() {
   }
   const sort = $("sort").value;
   const sorted = [...list];
-  if (sort === "score") sorted.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt);
-  else if (sort === "name") sorted.sort((a, b) => displayName(a).localeCompare(displayName(b)));
-  else sorted.sort((a, b) => b.updatedAt - a.updatedAt);
+  if (sort === "score") {
+    sorted.sort(
+      (a, b) =>
+        ViewerModel.totalReactions(b) - ViewerModel.totalReactions(a) ||
+        b.score - a.score ||
+        b.updatedAt - a.updatedAt
+    );
+  } else if (sort === "name") {
+    sorted.sort((a, b) => displayName(a).localeCompare(displayName(b)));
+  } else {
+    sorted.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
   return sorted;
 }
 
@@ -111,10 +120,21 @@ function renderRows() {
     }
     tr.appendChild(tags);
 
-    const score = document.createElement("td");
-    score.className = "num";
-    score.textContent = v.score > 0 ? "+" + v.score : String(v.score);
-    tr.appendChild(score);
+    const reactCell = document.createElement("td");
+    const entries = Object.entries(v.reactions || {}).sort((a, b) => b[1] - a[1]);
+    if (entries.length > 0) {
+      entries.forEach(([emoji, cnt]) => {
+        reactCell.appendChild(chip(`${emoji} ${cnt}`));
+      });
+    } else if (v.score !== 0) {
+      reactCell.textContent = v.score > 0 ? "+" + v.score : String(v.score);
+    } else {
+      const zero = document.createElement("span");
+      zero.className = "muted";
+      zero.textContent = "—";
+      reactCell.appendChild(zero);
+    }
+    tr.appendChild(reactCell);
 
     const notes = document.createElement("td");
     v.notes.slice(0, 3).forEach((n) => {
@@ -211,6 +231,56 @@ async function reload() {
   }
 }
 
+let editingReactions = {};
+
+function renderEditorReactions() {
+  const box = $("edReactions");
+  box.replaceChildren();
+  const list = [...new Set([...ViewerModel.DEFAULT_REACTIONS, ...Object.keys(editingReactions)])];
+  list.forEach((emoji) => {
+    const cnt = editingReactions[emoji] || 0;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.style.borderRadius = "999px";
+    btn.style.padding = "3px 10px";
+    if (cnt > 0) {
+      btn.style.borderColor = "var(--accent)";
+      btn.style.fontWeight = "600";
+    }
+    btn.title = I18n.t("vn_reactions_hint");
+    btn.textContent = cnt > 0 ? `${emoji} ${cnt}` : emoji;
+    btn.addEventListener("click", () => {
+      editingReactions[emoji] = (editingReactions[emoji] || 0) + 1;
+      renderEditorReactions();
+    });
+    btn.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if ((editingReactions[emoji] || 0) > 1) editingReactions[emoji]--;
+      else delete editingReactions[emoji];
+      renderEditorReactions();
+    });
+    box.appendChild(btn);
+  });
+}
+
+$("edReactionAddBtn").addEventListener("click", () => {
+  const em = $("edReactionAdd").value.trim().slice(0, ViewerModel.LIMITS.REACTION_KEY);
+  if (!em) return;
+  editingReactions[em] = (editingReactions[em] || 0) + 1;
+  $("edReactionAdd").value = "";
+  renderEditorReactions();
+});
+$("edReactionAdd").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $("edReactionAddBtn").click();
+  }
+});
+$("edReactionReset").addEventListener("click", () => {
+  editingReactions = {};
+  renderEditorReactions();
+});
+
 // ---------------------------------------------------------------- 編輯
 function openEditor(viewer) {
   state.editing = viewer;
@@ -218,7 +288,9 @@ function openEditor(viewer) {
   $("identityFields").hidden = !!viewer;
   $("edHandle").value = "";
   $("edNick").value = viewer ? viewer.customNickname : "";
-  $("edScore").value = viewer ? viewer.score : 0;
+  editingReactions = { ...(viewer && viewer.reactions ? viewer.reactions : {}) };
+  $("edReactionAdd").value = "";
+  renderEditorReactions();
   $("edNotes").value = viewer ? viewer.notes.join("\n") : "";
   $("edError").textContent = "";
   const active = new Set(viewer ? viewer.tagIds : []);
@@ -258,7 +330,7 @@ $("editorForm").addEventListener("submit", async (e) => {
   }
   const patch = {
     customNickname: $("edNick").value,
-    score: Number($("edScore").value) || 0,
+    reactions: editingReactions,
     tagIds: [...$("edTags").querySelectorAll("input:checked")].map((i) => i.value),
     notes: $("edNotes").value.split("\n"),
   };

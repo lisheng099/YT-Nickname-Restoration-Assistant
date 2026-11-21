@@ -163,6 +163,12 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 #rn-vn-panel .rn-vn-note span{flex:1;word-break:break-word}
 #rn-vn-panel input[type=color]{width:28px;height:24px;padding:0;border:none;background:none}
 #rn-vn-panel .rn-vn-scoreval{min-width:36px;text-align:center;font-weight:600}
+#rn-vn-panel .rn-vn-reactions{display:flex;flex-wrap:wrap;gap:5px}
+#rn-vn-panel .rn-vn-react-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:13px;line-height:1.3;user-select:none}
+#rn-vn-panel .rn-vn-react-btn[data-active="1"]{background:rgba(62,166,255,.22);border-color:#3ea6ff;font-weight:600}
+#rn-vn-panel .rn-vn-react-cnt{font-size:11px;font-variant-numeric:tabular-nums;opacity:.9}
+#rn-vn-panel .rn-vn-hint{font-size:11px;opacity:.65;margin-top:3px}
+.rn-vn-react-chip{background:rgba(62,166,255,.18);color:inherit}
 #rn-vn-dock{position:fixed;right:8px;bottom:64px;z-index:2147483645;font:12px/1.45 Roboto,Arial,sans-serif;color:#222}
 #rn-vn-dock.rn-vn-dark{color:#eee}
 #rn-vn-dock button{all:unset;cursor:pointer;box-sizing:border-box}
@@ -405,7 +411,15 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
         record.ext.tags.forEach((t) => box.appendChild(this.chip(t.label, t.color, "rn-vn-ext")));
         record.ext.aiTags.forEach((t) => box.appendChild(this.chip(t, "", "rn-vn-ext")));
       }
-      if (record.score !== 0) {
+      const reactionEntries = Object.entries(record.reactions || {}).sort((a, b) => b[1] - a[1]);
+      if (reactionEntries.length > 0) {
+        const summary = reactionEntries.map(([e, n]) => `${e} ${n}`).join("  ");
+        reactionEntries.slice(0, 3).forEach(([emoji, cnt]) => {
+          const rChip = this.chip(`${emoji} ${cnt}`, "", "rn-vn-react-chip");
+          rChip.title = `${this.t("vn_reactions")}: ${summary}`;
+          box.appendChild(rChip);
+        });
+      } else if (record.score !== 0) {
         const score = this.chip(
           (record.score > 0 ? "+" : "") + record.score,
           "",
@@ -573,7 +587,12 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       const head = el("div");
       const shown = record.customNickname || name || record.name || (record.ext && record.ext.name) || record.handle || record.channelId;
       head.appendChild(el("span", "rn-vn-dock-name", (tab === "top" ? i + 1 + ". " : "") + shown));
-      if (record.score !== 0) {
+      const dockReactions = Object.entries(record.reactions || {}).sort((a, b) => b[1] - a[1]);
+      if (dockReactions.length > 0) {
+        dockReactions.slice(0, 4).forEach(([emoji, cnt]) => {
+          head.appendChild(this.chip(`${emoji} ${cnt}`, "", "rn-vn-react-chip"));
+        });
+      } else if (record.score !== 0) {
         head.appendChild(
           this.chip((record.score > 0 ? "+" : "") + record.score, "", "rn-vn-score" + (record.score < 0 ? " rn-vn-neg" : ""))
         );
@@ -697,18 +716,58 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     });
     panel.appendChild(nick);
 
-    // 評分
-    panel.appendChild(el("h4", "", this.t("vn_score")));
-    const scoreRow = el("div", "rn-vn-row");
-    const minus = el("button", "", "−1");
-    const plus = el("button", "", "+1");
-    const reset = el("button", "", this.t("vn_score_reset"));
-    [minus, plus, reset].forEach((b) => (b.type = "button"));
-    minus.addEventListener("click", () => save({ scoreDelta: -1 }));
-    plus.addEventListener("click", () => save({ scoreDelta: 1 }));
-    reset.addEventListener("click", () => save({ score: 0 }));
-    scoreRow.append(minus, el("span", "rn-vn-scoreval", String(record.score || 0)), plus, reset);
-    panel.appendChild(scoreRow);
+    // 表情統計（左鍵 +1，右鍵 -1）
+    const reactions = record.reactions || {};
+    const totalReact = ViewerModel.totalReactions(record);
+    panel.appendChild(
+      el("h4", "", totalReact > 0 ? `${this.t("vn_reactions")} (${totalReact})` : this.t("vn_reactions"))
+    );
+    const reactBox = el("div", "rn-vn-reactions");
+    const emojiList = [...new Set([...ViewerModel.DEFAULT_REACTIONS, ...Object.keys(reactions)])];
+    emojiList.forEach((emoji) => {
+      const cnt = reactions[emoji] || 0;
+      const b = el("button", "rn-vn-react-btn");
+      b.type = "button";
+      b.dataset.active = cnt > 0 ? "1" : "0";
+      b.title = this.t("vn_reactions_hint");
+      b.appendChild(el("span", "", emoji));
+      if (cnt > 0) b.appendChild(el("span", "rn-vn-react-cnt", String(cnt)));
+      b.addEventListener("click", () => save({ reactionDelta: { emoji, delta: 1 } }));
+      b.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (cnt > 0) save({ reactionDelta: { emoji, delta: -1 } });
+      });
+      reactBox.appendChild(b);
+    });
+    panel.appendChild(reactBox);
+    const reactAddRow = el("div", "rn-vn-row");
+    reactAddRow.style.marginTop = "6px";
+    const customEmoji = el("input");
+    customEmoji.type = "text";
+    customEmoji.maxLength = ViewerModel.LIMITS.REACTION_KEY;
+    customEmoji.placeholder = this.t("vn_reaction_add_ph");
+    customEmoji.dataset.rnVnField = "react";
+    const addEmojiBtn = el("button", "", "+1");
+    addEmojiBtn.type = "button";
+    const commitEmoji = () => {
+      const em = customEmoji.value.trim();
+      if (!em) return;
+      customEmoji.value = "";
+      save({ reactionDelta: { emoji: em, delta: 1 } });
+    };
+    addEmojiBtn.addEventListener("click", commitEmoji);
+    customEmoji.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") commitEmoji();
+    });
+    reactAddRow.append(customEmoji, addEmojiBtn);
+    if (totalReact > 0) {
+      const resetReact = el("button", "", this.t("vn_score_reset"));
+      resetReact.type = "button";
+      resetReact.addEventListener("click", () => save({ clearReactions: true }));
+      reactAddRow.appendChild(resetReact);
+    }
+    panel.appendChild(reactAddRow);
+    panel.appendChild(el("div", "rn-vn-hint", this.t("vn_reactions_hint")));
 
     // 標籤
     panel.appendChild(el("h4", "", this.t("vn_tags")));

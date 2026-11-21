@@ -124,13 +124,18 @@ const BgViewers = {
     return this.index.tags;
   },
 
-  // 評分最高的觀眾 (聊天室小榜用)
+  // 表情次數最高的觀眾 (聊天室小榜用)
   top: async function (limit) {
     await this.ready();
     return this.index
       .list()
-      .filter((r) => r.score > 0)
-      .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
+      .filter((r) => ViewerModel.totalReactions(r) > 0 || r.score > 0)
+      .sort(
+        (a, b) =>
+          ViewerModel.totalReactions(b) - ViewerModel.totalReactions(a) ||
+          b.score - a.score ||
+          b.updatedAt - a.updatedAt
+      )
       .slice(0, Math.max(1, Math.min(50, limit || 10)));
   },
 

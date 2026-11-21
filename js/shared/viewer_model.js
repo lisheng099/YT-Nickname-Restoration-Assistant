@@ -9,6 +9,8 @@
   const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
   const COLOR = /^#[0-9a-fA-F]{6}$/;
 
+  const DEFAULT_REACTIONS = ["👍", "😂", "😢", "😡", "👎"];
+
   const LIMITS = {
     NICKNAME: 50,
     NAME: 100,
@@ -18,6 +20,9 @@
     TAGS: 100,
     TAGS_PER_VIEWER: 30,
     SCORE: 1000000,
+    REACTION_COUNT: 1000000,
+    REACTIONS_PER_VIEWER: 30,
+    REACTION_KEY: 16,
     VIEWERS: 50000,
     EXT_TAGS: 20,
   };
@@ -42,6 +47,41 @@
     const n = Math.round(Number(value));
     if (!Number.isFinite(n)) return 0;
     return Math.max(-LIMITS.SCORE, Math.min(LIMITS.SCORE, n));
+  }
+
+  function normalizeReactionKey(value) {
+    if (typeof value !== "string") return "";
+    return value.trim().slice(0, LIMITS.REACTION_KEY);
+  }
+
+  function normalizeReactions(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    let count = 0;
+    for (const [k, v] of Object.entries(raw)) {
+      const key = normalizeReactionKey(k);
+      const n = Math.round(Number(v));
+      if (!key || !Number.isFinite(n) || n <= 0) continue;
+      out[key] = Math.min(LIMITS.REACTION_COUNT, (out[key] || 0) + n);
+      count++;
+      if (count >= LIMITS.REACTIONS_PER_VIEWER) break;
+    }
+    return out;
+  }
+
+  function totalReactions(rec) {
+    if (!rec || !rec.reactions) return 0;
+    let sum = 0;
+    for (const n of Object.values(rec.reactions)) sum += Number(n) || 0;
+    return sum;
+  }
+
+  function mergeReactions(a, b) {
+    const merged = { ...(a || {}) };
+    for (const [k, v] of Object.entries(b || {})) {
+      merged[k] = (merged[k] || 0) + (Number(v) || 0);
+    }
+    return normalizeReactions(merged);
   }
 
   function uniqueStrings(list, maxLen, maxCount) {
@@ -117,16 +157,24 @@
       tagIds: uniqueStrings(raw.tagIds, 40, LIMITS.TAGS_PER_VIEWER),
       notes: uniqueStrings(raw.notes, LIMITS.NOTE, LIMITS.NOTES),
       score: clampScore(raw.score),
+      reactions: normalizeReactions(raw.reactions),
       updatedAt,
       ext: normalizeExt(raw.ext),
     };
   }
 
   function isEmpty(rec) {
-    return !rec.customNickname && rec.tagIds.length === 0 && rec.notes.length === 0 && rec.score === 0 && !rec.ext;
+    return (
+      !rec.customNickname &&
+      rec.tagIds.length === 0 &&
+      rec.notes.length === 0 &&
+      rec.score === 0 &&
+      totalReactions(rec) === 0 &&
+      !rec.ext
+    );
   }
 
-  // 兩筆指向同一人的紀錄合併：標籤與備註取聯集、評分相加、暱稱取較新者
+  // 兩筆指向同一人的紀錄合併：標籤與備註取聯集、評分與表情次數相加、暱稱取較新者
   function mergeRecords(base, other) {
     const newer = (other.nicknameAt || 0) > (base.nicknameAt || 0);
     const nickFrom = (newer && other.customNickname) || !base.customNickname ? other : base;
@@ -139,6 +187,7 @@
       tagIds: [...base.tagIds, ...other.tagIds],
       notes: [...base.notes, ...other.notes],
       score: base.score + other.score,
+      reactions: mergeReactions(base.reactions, other.reactions),
       updatedAt: Math.max(base.updatedAt, other.updatedAt),
       ext: base.ext || other.ext,
     });
@@ -210,7 +259,7 @@
       if (!rec) {
         rec = normalizeRecord({ channelId, handle });
       } else {
-        rec = { ...rec, tagIds: [...rec.tagIds], notes: [...rec.notes] };
+        rec = { ...rec, tagIds: [...rec.tagIds], notes: [...rec.notes], reactions: { ...(rec.reactions || {}) } };
         const oldKey = rec.key;
         this._drop(rec);
         // 之前只知道 handle，現在知道 channel id：改以 channel id 為主鍵
@@ -251,6 +300,19 @@
       if (p.removeNote) rec.notes = rec.notes.filter((n) => n !== p.removeNote);
       if (p.score !== undefined) rec.score = clampScore(p.score);
       if (p.scoreDelta) rec.score = clampScore(rec.score + clampScore(p.scoreDelta));
+      if (p.reactions !== undefined) rec.reactions = normalizeReactions(p.reactions);
+      if (p.clearReactions) rec.reactions = {};
+      if (p.reactionDelta && typeof p.reactionDelta === "object") {
+        const key = normalizeReactionKey(p.reactionDelta.emoji);
+        const delta = Math.round(Number(p.reactionDelta.delta));
+        if (key && Number.isFinite(delta) && delta !== 0) {
+          const next = { ...(rec.reactions || {}) };
+          const val = Math.max(0, Math.min(LIMITS.REACTION_COUNT, (next[key] || 0) + delta));
+          if (val > 0) next[key] = val;
+          else delete next[key];
+          rec.reactions = normalizeReactions(next);
+        }
+      }
       if (p.ext !== undefined) rec.ext = p.ext;
       // 只保留仍存在的標籤
       const known = new Set(this.tags.map((t) => t.id));
@@ -307,6 +369,7 @@
           tagIds: [...r.tagIds],
           notes: [...r.notes],
           score: r.score,
+          reactions: { ...(r.reactions || {}) },
           updatedAt: r.updatedAt,
         })),
       };
@@ -314,7 +377,7 @@
 
     /**
      * 匯入備份。mode "replace" 以檔案內容取代現有資料；"merge" 與現有資料合併
-     * (同 id 的標籤以檔案為準，同一位觀眾的標籤與備註取聯集、評分取檔案的值)。
+     * (同 id 的標籤以檔案為準，同一位觀眾的標籤與備註取聯集、評分與表情次數取檔案的值)。
      * 回傳 { imported, skipped }；格式不符時丟出 Error("format")。
      */
     importData(data, mode = "merge") {
@@ -349,8 +412,12 @@
         const existing = this.find(rec);
         if (existing) {
           this._drop(existing);
-          const merged = mergeRecords({ ...rec, score: 0, ext: existing.ext }, { ...existing, score: 0 });
+          const merged = mergeRecords(
+            { ...rec, score: 0, reactions: {}, ext: existing.ext },
+            { ...existing, score: 0, reactions: {} }
+          );
           merged.score = rec.score;
+          merged.reactions = { ...rec.reactions };
           merged.ext = existing.ext;
           this._put(merged);
         } else {
@@ -374,12 +441,15 @@
 
   const api = {
     FORMAT,
+    DEFAULT_REACTIONS,
     LIMITS,
     ViewerIndex,
     normalizeRecord,
     normalizeChannelId,
     normalizeHandle,
     normalizeTagDefs,
+    normalizeReactions,
+    totalReactions,
     normalizeExt,
     mergeRecords,
     isEmpty,

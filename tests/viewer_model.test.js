@@ -193,3 +193,27 @@ test("外部唯讀資料：可寫入、不更新修改時間、空內容視為�
   assert.equal(only.record.key, UC_B);
   assert.equal(idx.patch({ channelId: UC_B }, { ext: { aiTags: [] } }).record, null);
 });
+
+test("表情統計：點擊累進、減一歸零、清空與匯出匯入", () => {
+  const idx = new ViewerIndex();
+  idx.patch({ channelId: UC_A }, { reactionDelta: { emoji: "👍", delta: 1 } }, 10);
+  idx.patch({ channelId: UC_A }, { reactionDelta: { emoji: "👍", delta: 1 } }, 20);
+  const { record } = idx.patch({ channelId: UC_A }, { reactionDelta: { emoji: "😂", delta: 1 } }, 30);
+  assert.deepEqual(record.reactions, { "👍": 2, "😂": 1 });
+  assert.equal(ViewerModel.totalReactions(record), 3);
+
+  // 右鍵 -1，減到 0 時自動移除該表情
+  const dec = idx.patch({ channelId: UC_A }, { reactionDelta: { emoji: "😂", delta: -1 } }, 40);
+  assert.deepEqual(dec.record.reactions, { "👍": 2 });
+
+  // 匯出再匯入可完整保留表情次數
+  const exported = idx.exportData(50);
+  const idx2 = new ViewerIndex();
+  idx2.importData(exported, "replace");
+  assert.deepEqual(idx2.find({ channelId: UC_A }).reactions, { "👍": 2 });
+
+  // 清空表情且無其他資料時移除該筆空紀錄
+  const cleared = idx.patch({ channelId: UC_A }, { clearReactions: true }, 60);
+  assert.equal(cleared.record, null);
+});
+
