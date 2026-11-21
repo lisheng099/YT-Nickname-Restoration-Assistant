@@ -139,30 +139,38 @@ const BgCache = {
     });
   },
 
+  normalizeKey: function (handle) {
+    return typeof handle === "string" ? handle.trim().toLowerCase() : "";
+  },
+
   // === 核心讀取邏輯 ===
   get: async function (handle) {
-    if (!handle) return null;
+    const key = this.normalizeKey(handle);
+    if (!key) return null;
 
     // 1. 查記憶體
-    if (this.memoryCache.has(handle)) {
-      const data = this.memoryCache.get(handle);
-      
+    if (this.memoryCache.has(key)) {
+      const data = this.memoryCache.get(key);
+
       // 先刪除，再重新加入
       // 這會讓這個 handle 從 Map 的原本位置移到「最後面」(變成最新)
-      this.memoryCache.delete(handle);
-      this.memoryCache.set(handle, data);
-      
+      this.memoryCache.delete(key);
+      this.memoryCache.set(key, data);
+
       return data;
     }
 
     // 2. 查緩衝區
-    if (this.pendingWrites.has(handle)) {
-      return this.pendingWrites.get(handle);
+    if (this.pendingWrites.has(key)) {
+      return this.pendingWrites.get(key);
     }
 
-    // 3. 查硬碟
+    // 3. 查硬碟（優先查小寫鍵，若無則相容舊版大小寫鍵）
     try {
-      const diskData = await idbKeyval.get(handle);
+      let diskData = await idbKeyval.get(key);
+      if (!diskData && handle !== key) {
+        diskData = await idbKeyval.get(handle);
+      }
       if (diskData) {
         // 動態計算過期狀態
         const userTTL = await this.getUserTTL();
@@ -171,11 +179,11 @@ const BgCache = {
 
         // 雖然原始資料只有 name/subs/ts，但回傳時需附帶 isExpired
         const result = {
-            ...diskData,
-            isExpired: isExpired
+          ...diskData,
+          isExpired: isExpired,
         };
 
-        this.setMemory(handle, result);
+        this.setMemory(key, result);
         return result;
       }
     } catch (err) {
@@ -186,7 +194,8 @@ const BgCache = {
 
   // === 寫入邏輯 ===
   set: function (handle, data) {
-    if (!handle || !data) return;
+    const key = this.normalizeKey(handle);
+    if (!key || !data) return;
 
     const cacheItem = {
       name: data.name,
@@ -197,10 +206,10 @@ const BgCache = {
     if (data.cid) cacheItem.cid = data.cid;
 
     // 1. 更新記憶體
-    this.setMemory(handle, cacheItem);
+    this.setMemory(key, cacheItem);
 
     // 2. 加入緩衝區
-    this.pendingWrites.set(handle, cacheItem);
+    this.pendingWrites.set(key, cacheItem);
 
     // 3. 判斷寫入時機
     if (this.pendingWrites.size >= this.BATCH_LIMIT) {
@@ -219,14 +228,20 @@ const BgCache = {
     if (this.pendingWrites.size === 0) return;
 
     const entries = Array.from(this.pendingWrites.entries());
-    this.pendingWrites.clear();
     if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
 
     try {
       if (idbKeyval.setMany) {
         await idbKeyval.setMany(entries);
       } else {
         await Promise.all(entries.map(([k, v]) => idbKeyval.set(k, v)));
+      }
+      // 僅在寫入成功後移除對應版本，避免寫入期間的新更新或失敗時遺失資料
+      for (const [k, v] of entries) {
+        if (this.pendingWrites.get(k) === v) {
+          this.pendingWrites.delete(k);
+        }
       }
 
       if (AppConfig.DEBUG_MODE) {

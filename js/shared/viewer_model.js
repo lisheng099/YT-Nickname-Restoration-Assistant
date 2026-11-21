@@ -37,7 +37,8 @@
     EXT_TAGS: 20,
   };
 
-  const IMAGE_ICON = /^https:\/\/[a-z0-9.-]+\//i;
+  const IMAGE_ICON =
+    /^https:\/\/(?:yt3\.ggpht\.com|yt3\.googleusercontent\.com|lh3\.googleusercontent\.com|www\.youtube\.com\/s\/gaming\/emoji)\//i;
   const isImageIcon = (value) => typeof value === "string" && IMAGE_ICON.test(value.trim());
 
   const text = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");

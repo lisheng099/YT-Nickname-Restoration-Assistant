@@ -132,9 +132,17 @@ async function handleCacheGet(handle, sendResponse) {
     return;
   }
 
-  // (1) 記憶體 (Memory Cache)
-  if (BgCache.memoryCache.has(handle)) {
-    sendResponse(BgCache.memoryCache.get(handle));
+  // (1) 記憶體與寫入緩衝區 (Memory Cache / Pending Writes)
+  const normKey = BgCache.normalizeKey(handle);
+  if (BgCache.memoryCache.has(normKey)) {
+    const data = BgCache.memoryCache.get(normKey);
+    BgCache.memoryCache.delete(normKey);
+    BgCache.memoryCache.set(normKey, data);
+    sendResponse(data);
+    return;
+  }
+  if (BgCache.pendingWrites.has(normKey)) {
+    sendResponse(BgCache.pendingWrites.get(normKey));
     return;
   }
 

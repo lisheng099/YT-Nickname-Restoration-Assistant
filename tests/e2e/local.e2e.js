@@ -39,24 +39,22 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
   // 新增標籤並貼上
   await panel.locator('[data-rn-vn-field="newtag"]').fill("常客");
   await panel.locator('[data-rn-vn-field="newtag"]').press("Enter");
-  await page.waitForSelector("#m1 .rn-vn-chip:not(.rn-vn-score):not(.rn-vn-notechip)");
+  await page.waitForSelector("#m1 .rn-vn-chip:not(.rn-vn-react)");
   assert.equal(await page.locator("#m1 .rn-vn-chip").first().textContent(), "常客");
 
-  // 評分 +1 兩次
-  await panel.getByRole("button", { name: "+1" }).click();
-  await page.waitForSelector("#m1 .rn-vn-score");
-  await panel.getByRole("button", { name: "+1" }).click();
-  await page.waitForFunction(() => document.querySelector("#m1 .rn-vn-score")?.textContent === "+2");
+  // 點擊留言反應（同一則留言僅能點一次，再點一次可切換或取消）
+  await panel.locator(".rn-vn-react-btn").first().click();
+  await page.waitForSelector("#m1 .rn-vn-react");
+  assert.match(await page.locator("#m1 .rn-vn-react").first().textContent(), /1/);
 
-  // 備註
+  // 備註（聊天室不再顯示 📌 chip，但迷你面板與管理頁可見）
   await panel.locator('[data-rn-vn-field="note"]').fill("喜歡貓");
   await panel.locator('[data-rn-vn-field="note"]').press("Enter");
-  await page.waitForSelector("#m1 .rn-vn-notechip");
-  assert.equal(await page.locator("#m1 .rn-vn-notechip").getAttribute("title"), "喜歡貓");
+  assert.equal(await page.locator("#m1 .rn-vn-notechip").count(), 0);
   await page.keyboard.press("Escape");
   await panel.waitFor({ state: "detached" });
 
-  // 迷你面板：最近發言的筆記與評分榜
+  // 迷你面板：最近發言的筆記與反應排行
   await page.locator("#rn-vn-dock .rn-vn-dock-toggle").click();
   await page.waitForSelector("#rn-vn-dock .rn-vn-dock-item");
   const recent = await page.locator("#rn-vn-dock .rn-vn-dock-body").textContent();
@@ -87,10 +85,10 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
   assert.equal(await page.locator("#m2 .rn-vn-chip").count(), 0);
   assert.equal(await page.locator("#m2 #author-name").isVisible(), true);
 
-  // 同一位觀眾的新訊息直接帶出筆記
+  // 同一位觀眾的新訊息直接帶出筆記與反應計數
   await page.evaluate((cid) => window.addChat("m3", "@ming", cid, "第二則"), UC("a"));
   await page.waitForSelector("#m3 .rn-vn-name");
-  assert.equal(await page.locator("#m3 .rn-vn-score").textContent(), "+2");
+  assert.match(await page.locator("#m3 .rn-vn-react").first().textContent(), /1/);
 
   // 元素被重複使用給另一位觀眾時，上一位的內容會清掉
   await page.evaluate(() => window.reuseChat("m3", "m4", "@stranger", "UC" + "y".repeat(22), "路過"));
@@ -108,14 +106,7 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
   const row = await manager.locator("#rows tr").first().textContent();
   assert.match(row, /小明/);
   assert.match(row, /常客/);
-  assert.match(row, /\+2/);
   assert.match(row, /喜歡貓/);
-
-  // 在管理頁改評分，聊天室即時更新
-  await manager.locator("#rows tr button").first().click();
-  await manager.locator("#edScore").fill("-3");
-  await manager.locator("#editorForm button[type=submit]").click();
-  await page.waitForFunction(() => document.querySelector("#m1 .rn-vn-score")?.textContent === "-3");
 
   // 匯出 JSON
   const [download] = await Promise.all([manager.waitForEvent("download"), manager.locator("#exportBtn").click()]);
@@ -123,7 +114,7 @@ test("純本地版：聊天室貼標籤、評分、備註、自訂暱稱，管�
   assert.equal(exported.format, "yt-viewer-notes-v1");
   assert.equal(exported.viewers[0].channelId, UC("a"));
   assert.equal(exported.viewers[0].customNickname, "小明");
-  assert.equal(exported.viewers[0].score, -3);
+  assert.ok(Object.values(exported.viewers[0].reactions || {}).some((n) => n >= 1));
 
   // 清除後以匯入還原
   manager.on("dialog", (d) => d.accept());

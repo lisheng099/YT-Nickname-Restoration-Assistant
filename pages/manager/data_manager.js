@@ -184,9 +184,13 @@ const DataManager = {
         finalTs = forcedExpiredTs;
       }
 
+      const itemVal = { name: name, subs: entry.subs || 0, ts: finalTs };
+      if (typeof entry.cid === "string" && /^UC[A-Za-z0-9_-]{22}$/.test(entry.cid)) {
+        itemVal.cid = entry.cid;
+      }
       candidates.push({
           key: key,
-          val: { name: name, subs: entry.subs || 0, ts: finalTs }
+          val: itemVal
       });
     }
 

@@ -410,7 +410,6 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
   harvestEmotes: function (rootNode) {
     if (this.allowedChannels === null) {
       this.loadAllowedChannels();
-      return;
     }
     if (!this.isOwnChannelForEmotes()) return;
     const scope = rootNode || document;
@@ -887,6 +886,10 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
             this.messageReactions.set(activeMsgKey, def.id);
             save({ reactionDeltas: [{ key: prev, delta: -1 }, { key: def.id, delta: 1 }] });
           } else {
+            if (this.messageReactions.size >= 2000) {
+              const oldest = this.messageReactions.keys().next().value;
+              if (oldest !== undefined) this.messageReactions.delete(oldest);
+            }
             this.messageReactions.set(activeMsgKey, def.id);
             save({ reactionDeltas: [{ key: def.id, delta: 1 }] });
           }

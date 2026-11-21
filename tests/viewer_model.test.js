@@ -239,4 +239,13 @@ test("反應項目定義：視窗簡稱對應後台詞語、同留言切換與�
   assert.deepEqual(idx2.reactionDefs.find((d) => d.id === coldId), { id: coldId, icon: "冷", label: "冷笑話" });
 });
 
+test("圖片貼圖白名單：僅允許 YouTube 官方圖片網域，拒絕任意第三方網址", () => {
+  assert.equal(ViewerModel.isImageIcon("https://yt3.ggpht.com/abc123=w48-h48-c-k-nd"), true);
+  assert.equal(ViewerModel.isImageIcon("https://yt3.googleusercontent.com/xyz=s48"), true);
+  assert.equal(ViewerModel.isImageIcon("https://evil.example.com/tracker.png"), false);
+  assert.equal(ViewerModel.isImageIcon("http://yt3.ggpht.com/insecure.png"), false);
+  assert.equal(ViewerModel.isImageIcon("冷"), false);
+});
+
+
 

@@ -43,21 +43,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("[Test Result]", response);
         els.raw.textContent = JSON.stringify(response, null, 2);
 
+        els.status.replaceChildren();
+        const badge = document.createElement("span");
         if (!response) {
-          els.status.innerHTML = `<span class="status-err">無回應 (Runtime Error)</span>`;
+          badge.className = "status-err";
+          badge.textContent = "無回應 (Runtime Error)";
+          els.status.appendChild(badge);
           return;
         }
 
         if (response.success) {
-          els.status.innerHTML = `<span class="status-ok">${I18n.t("status_ok")} (${duration}ms)</span>`;
+          badge.className = "status-ok";
+          badge.textContent = `${I18n.t("status_ok")} (${duration}ms)`;
+          els.status.appendChild(badge);
           els.name.textContent = response.nameRaw;
           els.subs.textContent = response.subs + " (Raw)";
         } else {
-          els.status.innerHTML = `<span class="status-err">${I18n.t("status_fail")}: ${
-            response.error || "Unknown"
-          }</span>`;
+          badge.className = "status-err";
+          badge.textContent = `${I18n.t("status_fail")}: ${response.error || "Unknown"}`;
+          els.status.appendChild(badge);
           if (response.status === 429) {
-            els.status.innerHTML += " " + I18n.t("status_rate_limit");
+            els.status.appendChild(document.createTextNode(" " + I18n.t("status_rate_limit")));
           }
         }
       }
