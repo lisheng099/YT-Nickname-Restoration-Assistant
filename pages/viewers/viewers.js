@@ -9,7 +9,12 @@ const REV_KEY = "yt_viewer_notes_rev";
 const PAGE_SIZE = 50;
 
 const $ = (id) => document.getElementById(id);
-const state = { viewers: [], tags: [], page: 0, editing: null };
+const state = { viewers: [], tags: [], reactionDefs: ViewerModel.defaultReactionDefs(), page: 0, editing: null };
+
+function reactionDisplay(key) {
+  const def = state.reactionDefs.find((d) => d.id === key) || state.reactionDefs.find((d) => d.icon === key);
+  return def ? { icon: def.icon, label: def.label } : { icon: key, label: key };
+}
 
 function send(message) {
   return new Promise((resolve, reject) => {
@@ -123,8 +128,10 @@ function renderRows() {
     const reactCell = document.createElement("td");
     const entries = Object.entries(v.reactions || {}).sort((a, b) => b[1] - a[1]);
     if (entries.length > 0) {
-      entries.forEach(([emoji, cnt]) => {
-        reactCell.appendChild(chip(`${emoji} ${cnt}`));
+      entries.forEach(([k, cnt]) => {
+        const d = reactionDisplay(k);
+        const text = d.label !== d.icon ? `${d.icon} ${d.label} ${cnt}` : `${d.label} ${cnt}`;
+        reactCell.appendChild(chip(text));
       });
     } else if (v.score !== 0) {
       reactCell.textContent = v.score > 0 ? "+" + v.score : String(v.score);
@@ -219,12 +226,51 @@ function renderTagDefs() {
   }
 }
 
+function renderReactionDefs() {
+  const box = $("reactionDefs");
+  box.replaceChildren();
+  state.reactionDefs.forEach((def) => {
+    const row = document.createElement("div");
+    row.className = "tagdef";
+    const icon = document.createElement("input");
+    icon.type = "text";
+    icon.maxLength = ViewerModel.LIMITS.REACTION_ICON;
+    icon.value = def.icon;
+    icon.style.flex = "0 0 120px";
+    icon.setAttribute("aria-label", I18n.t("vnm_reaction_icon_ph"));
+    const label = document.createElement("input");
+    label.type = "text";
+    label.maxLength = ViewerModel.LIMITS.REACTION_LABEL;
+    label.value = def.label;
+    label.setAttribute("aria-label", I18n.t("vnm_reaction_label_ph"));
+    const commit = () => {
+      const nextIcon = icon.value.trim() || def.icon;
+      const nextLabel = label.value.trim() || nextIcon;
+      const next = state.reactionDefs.map((d) => (d.id === def.id ? { ...d, icon: nextIcon, label: nextLabel } : d));
+      send({ type: "VN_REACTION_DEFS_SET", reactionDefs: next });
+    };
+    icon.addEventListener("change", commit);
+    label.addEventListener("change", commit);
+    const del = document.createElement("button");
+    del.className = "danger";
+    del.textContent = I18n.t("btn_delete");
+    del.addEventListener("click", () => {
+      if (!confirm(I18n.t("vnm_confirm_delete_tag", { name: def.label }))) return;
+      send({ type: "VN_REACTION_DEFS_SET", reactionDefs: state.reactionDefs.filter((d) => d.id !== def.id) });
+    });
+    row.append(icon, label, del);
+    box.appendChild(row);
+  });
+}
+
 async function reload() {
   try {
     const data = await send({ type: "VN_LIST" });
     state.viewers = data.viewers;
     state.tags = data.tags;
+    if (Array.isArray(data.reactionDefs)) state.reactionDefs = data.reactionDefs;
     renderRows();
+    renderReactionDefs();
     renderTagDefs();
   } catch (e) {
     setStatus(I18n.t("vnm_unavailable"));
@@ -236,9 +282,8 @@ let editingReactions = {};
 function renderEditorReactions() {
   const box = $("edReactions");
   box.replaceChildren();
-  const list = [...new Set([...ViewerModel.DEFAULT_REACTIONS, ...Object.keys(editingReactions)])];
-  list.forEach((emoji) => {
-    const cnt = editingReactions[emoji] || 0;
+  state.reactionDefs.forEach((def) => {
+    const cnt = editingReactions[def.id] || 0;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.style.borderRadius = "999px";
@@ -248,38 +293,41 @@ function renderEditorReactions() {
       btn.style.fontWeight = "600";
     }
     btn.title = I18n.t("vn_reactions_hint");
-    btn.textContent = cnt > 0 ? `${emoji} ${cnt}` : emoji;
+    const caption = def.label !== def.icon ? `${def.icon} ${def.label}` : def.label;
+    btn.textContent = cnt > 0 ? `${caption} ${cnt}` : caption;
     btn.addEventListener("click", () => {
-      editingReactions[emoji] = (editingReactions[emoji] || 0) + 1;
+      editingReactions[def.id] = (editingReactions[def.id] || 0) + 1;
       renderEditorReactions();
     });
     btn.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if ((editingReactions[emoji] || 0) > 1) editingReactions[emoji]--;
-      else delete editingReactions[emoji];
+      if ((editingReactions[def.id] || 0) > 1) editingReactions[def.id]--;
+      else delete editingReactions[def.id];
       renderEditorReactions();
     });
     box.appendChild(btn);
   });
 }
 
-$("edReactionAddBtn").addEventListener("click", () => {
-  const em = $("edReactionAdd").value.trim().slice(0, ViewerModel.LIMITS.REACTION_KEY);
-  if (!em) return;
-  editingReactions[em] = (editingReactions[em] || 0) + 1;
-  $("edReactionAdd").value = "";
-  renderEditorReactions();
-});
-$("edReactionAdd").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    $("edReactionAddBtn").click();
-  }
-});
 $("edReactionReset").addEventListener("click", () => {
   editingReactions = {};
   renderEditorReactions();
 });
+
+$("addReaction").addEventListener("click", async () => {
+  const icon = $("newReactionIcon").value.trim();
+  const label = $("newReactionLabel").value.trim() || icon;
+  if (!icon) return;
+  const def = { id: ViewerModel.newReactionId(state.reactionDefs), icon, label };
+  await send({ type: "VN_REACTION_DEFS_SET", reactionDefs: [...state.reactionDefs, def] });
+  $("newReactionIcon").value = "";
+  $("newReactionLabel").value = "";
+});
+[$("newReactionIcon"), $("newReactionLabel")].forEach((el) =>
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("addReaction").click();
+  })
+);
 
 // ---------------------------------------------------------------- 編輯
 function openEditor(viewer) {
@@ -289,7 +337,6 @@ function openEditor(viewer) {
   $("edHandle").value = "";
   $("edNick").value = viewer ? viewer.customNickname : "";
   editingReactions = { ...(viewer && viewer.reactions ? viewer.reactions : {}) };
-  $("edReactionAdd").value = "";
   renderEditorReactions();
   $("edNotes").value = viewer ? viewer.notes.join("\n") : "";
   $("edError").textContent = "";

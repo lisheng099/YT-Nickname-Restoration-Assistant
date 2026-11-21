@@ -136,6 +136,19 @@
     </div>
 
     <div class="card">
+      <h2 data-i18n="vnm_reactions_title">反應項目設定（視窗顯示 ↔ 後台詞語）</h2>
+      <div class="muted" style="margin-bottom: 10px" data-i18n="vnm_reactions_desc">
+        設定在聊天室小視窗顯示的簡稱或表情，以及在管理頁對應顯示的完整詞語（例如：視窗「冷」對應後台「冷笑話」）。
+      </div>
+      <div id="reactionDefs"></div>
+      <div class="tagdef">
+        <input type="text" id="newReactionIcon" maxlength="8" style="flex: 0 0 120px" data-i18n-placeholder="vnm_reaction_icon_ph" placeholder="視窗顯示 (如 冷)" />
+        <input type="text" id="newReactionLabel" maxlength="20" data-i18n-placeholder="vnm_reaction_label_ph" placeholder="後台詞語 (如 冷笑話)" />
+        <button id="addReaction" data-i18n="vn_add">新增</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 data-i18n="vnm_tags_title">標籤</h2>
       <div id="tagDefs"></div>
       <div class="tagdef">
@@ -168,12 +181,10 @@
         <input type="text" id="edNick" maxlength="50" />
         <label data-i18n="vn_reactions">表情統計</label>
         <div class="row" id="edReactions" style="margin-bottom: 6px"></div>
-        <div class="row" style="margin-bottom: 4px">
-          <input type="text" id="edReactionAdd" maxlength="16" style="flex: 1; min-width: 0" data-i18n-placeholder="vn_reaction_add_ph" placeholder="自訂表情（如 ❤️）" />
-          <button type="button" id="edReactionAddBtn">+1</button>
+        <div class="row" style="margin-bottom: 4px; justify-content: space-between">
+          <span class="muted" style="font-size: 11px" data-i18n="vn_reactions_hint">左鍵 +1，右鍵 -1</span>
           <button type="button" id="edReactionReset" data-i18n="vn_score_reset">歸零</button>
         </div>
-        <div class="muted" style="font-size: 11px" data-i18n="vn_reactions_hint">左鍵 +1，右鍵 -1</div>
         <label data-i18n="vn_tags">標籤</label>
         <div class="checks" id="edTags"></div>
         <label for="edNotes" data-i18n="vnm_field_notes">備註 (每行一則)</label>

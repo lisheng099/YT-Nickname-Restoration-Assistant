@@ -30,6 +30,7 @@ const ViewerNotes = {
   errors: 0,
   cache: new Map(), // idKey -> record | null
   tags: [],
+  reactionDefs: [],
   queue: new Set(),
   queueTimer: null,
   pendingIds: new Map(), // idKey -> identity
@@ -37,6 +38,10 @@ const ViewerNotes = {
   lookupTimer: null,
   panel: null,
   panelIdentity: null,
+  panelMsgKey: null,
+  messageReactions: new Map(), // msgKey -> reactionId (one reaction per chat message)
+  hostIds: new WeakMap(),
+  hostIdSeq: 0,
   dock: null,
   dockOpen: false,
   dockTab: "recent",
@@ -164,10 +169,11 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 #rn-vn-panel input[type=color]{width:28px;height:24px;padding:0;border:none;background:none}
 #rn-vn-panel .rn-vn-scoreval{min-width:36px;text-align:center;font-weight:600}
 #rn-vn-panel .rn-vn-reactions{display:flex;flex-wrap:wrap;gap:5px}
-#rn-vn-panel .rn-vn-react-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:13px;line-height:1.3;user-select:none}
-#rn-vn-panel .rn-vn-react-btn[data-active="1"]{background:rgba(62,166,255,.22);border-color:#3ea6ff;font-weight:600}
+#rn-vn-panel .rn-vn-react-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:13px;line-height:1.3;user-select:none}
+#rn-vn-panel .rn-vn-react-btn[data-active="1"]{background:rgba(128,128,128,.22);font-weight:600}
+#rn-vn-panel .rn-vn-react-btn[aria-pressed="true"]{background:rgba(62,166,255,.28);border-color:#3ea6ff;outline:1.5px solid #3ea6ff;font-weight:700}
 #rn-vn-panel .rn-vn-react-cnt{font-size:11px;font-variant-numeric:tabular-nums;opacity:.9}
-#rn-vn-panel .rn-vn-hint{font-size:11px;opacity:.65;margin-top:3px}
+#rn-vn-panel .rn-vn-hint{font-size:11px;opacity:.65;margin-top:4px}
 .rn-vn-react-chip{background:rgba(62,166,255,.18);color:inherit}
 #rn-vn-dock{position:fixed;right:8px;bottom:64px;z-index:2147483645;font:12px/1.45 Roboto,Arial,sans-serif;color:#222}
 #rn-vn-dock.rn-vn-dark{color:#eee}
@@ -309,6 +315,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       this.send({ type: "VN_LOOKUP", ids: entries.map((e) => e[1]) }).then((res) => {
         if (!res) return;
         this.tags = res.tags || [];
+        if (Array.isArray(res.reactionDefs)) this.reactionDefs = res.reactionDefs;
         if (this.cache.size > this.MAX_CACHE) this.cache.clear();
         entries.forEach(([idKey], i) => {
           this.cache.set(idKey, res.records[i] || null);
@@ -316,6 +323,27 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
         });
       });
     }, this.BATCH_DELAY);
+  },
+
+  messageKeyOf: function (host) {
+    if (!host) return null;
+    if (host.id) return "id:" + host.id;
+    let tok = this.hostIds.get(host);
+    if (!tok) {
+      tok = "el:" + ++this.hostIdSeq;
+      this.hostIds.set(host, tok);
+    }
+    return tok;
+  },
+
+  reactionDefsList: function () {
+    return this.reactionDefs && this.reactionDefs.length ? this.reactionDefs : ViewerModel.defaultReactionDefs();
+  },
+
+  reactionDisplay: function (key) {
+    const defs = this.reactionDefsList();
+    const def = defs.find((d) => d.id === key) || defs.find((d) => d.icon === key);
+    return def ? { icon: def.icon, label: def.label } : { icon: key, label: key };
   },
 
   plain: function (identity) {
@@ -413,9 +441,15 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       }
       const reactionEntries = Object.entries(record.reactions || {}).sort((a, b) => b[1] - a[1]);
       if (reactionEntries.length > 0) {
-        const summary = reactionEntries.map(([e, n]) => `${e} ${n}`).join("  ");
-        reactionEntries.slice(0, 3).forEach(([emoji, cnt]) => {
-          const rChip = this.chip(`${emoji} ${cnt}`, "", "rn-vn-react-chip");
+        const summary = reactionEntries
+          .map(([k, n]) => {
+            const d = this.reactionDisplay(k);
+            return `${d.label} ${n}`;
+          })
+          .join("  ");
+        reactionEntries.slice(0, 3).forEach(([k, cnt]) => {
+          const d = this.reactionDisplay(k);
+          const rChip = this.chip(`${d.icon} ${cnt}`, "", "rn-vn-react-chip");
           rChip.title = `${this.t("vn_reactions")}: ${summary}`;
           box.appendChild(rChip);
         });
@@ -455,7 +489,11 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       edit.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.openPanel({ ...this.plain(identity), name: identity.name, idKey: identity.idKey }, edit);
+        this.openPanel(
+          { ...this.plain(identity), name: identity.name, idKey: identity.idKey },
+          edit,
+          this.messageKeyOf(host)
+        );
       });
       box.appendChild(edit);
     }
@@ -485,7 +523,11 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       if (!identity) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.openPanel({ ...this.plain(identity), name: identity.name, idKey: identity.idKey }, avatar);
+      this.openPanel(
+        { ...this.plain(identity), name: identity.name, idKey: identity.idKey },
+        avatar,
+        this.messageKeyOf(host)
+      );
     };
     ["click", "keydown"].forEach((type) => document.addEventListener(type, this.avatarHandler, true));
   },
@@ -557,6 +599,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       const res = await this.send({ type: "VN_LOOKUP", ids: recent });
       if (res) {
         this.tags = res.tags || this.tags;
+        if (Array.isArray(res.reactionDefs)) this.reactionDefs = res.reactionDefs;
         items = recent.map((r, i) => ({ record: res.records[i], name: r.name })).filter((x) => x.record);
       }
     }
@@ -589,8 +632,11 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       head.appendChild(el("span", "rn-vn-dock-name", (tab === "top" ? i + 1 + ". " : "") + shown));
       const dockReactions = Object.entries(record.reactions || {}).sort((a, b) => b[1] - a[1]);
       if (dockReactions.length > 0) {
-        dockReactions.slice(0, 4).forEach(([emoji, cnt]) => {
-          head.appendChild(this.chip(`${emoji} ${cnt}`, "", "rn-vn-react-chip"));
+        dockReactions.slice(0, 4).forEach(([k, cnt]) => {
+          const d = this.reactionDisplay(k);
+          const c = this.chip(`${d.icon} ${cnt}`, "", "rn-vn-react-chip");
+          c.title = `${d.label} ${cnt}`;
+          head.appendChild(c);
         });
       } else if (record.score !== 0) {
         head.appendChild(
@@ -620,21 +666,24 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     if (this.panel) this.panel.remove();
     this.panel = null;
     this.panelIdentity = null;
+    this.panelMsgKey = null;
   },
 
-  // anchor 為 null 時表示就地重畫 (保留位置)
-  openPanel: async function (identity, anchor) {
+  // anchor 為 null 時表示就地重畫 (保留位置與目前留言 key)
+  openPanel: async function (identity, anchor, msgKey) {
     const res = await this.send({
       type: "VN_LOOKUP",
       ids: [this.plain(identity)],
     });
     if (!res) return;
     this.tags = res.tags || [];
+    if (Array.isArray(res.reactionDefs)) this.reactionDefs = res.reactionDefs;
     const record = res.records[0] || {
       customNickname: "",
       tagIds: [],
       notes: [],
       score: 0,
+      reactions: {},
       ext: null,
       name: "",
     };
@@ -668,6 +717,8 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       }
     }
     this.panelIdentity = identity;
+    if (msgKey !== undefined) this.panelMsgKey = msgKey;
+    const activeMsgKey = this.panelMsgKey;
     panel.classList.toggle("rn-vn-dark", document.documentElement.hasAttribute("dark"));
     panel.replaceChildren();
 
@@ -716,58 +767,46 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     });
     panel.appendChild(nick);
 
-    // 表情統計（左鍵 +1，右鍵 -1）
+    // 表情／文字反應統計（同則留言限點 1 次：再點取消，點其他則切換）
     const reactions = record.reactions || {};
     const totalReact = ViewerModel.totalReactions(record);
+    const defsList = this.reactionDefsList();
+    const chosenId = activeMsgKey ? this.messageReactions.get(activeMsgKey) || null : null;
     panel.appendChild(
       el("h4", "", totalReact > 0 ? `${this.t("vn_reactions")} (${totalReact})` : this.t("vn_reactions"))
     );
     const reactBox = el("div", "rn-vn-reactions");
-    const emojiList = [...new Set([...ViewerModel.DEFAULT_REACTIONS, ...Object.keys(reactions)])];
-    emojiList.forEach((emoji) => {
-      const cnt = reactions[emoji] || 0;
+    defsList.forEach((def) => {
+      const cnt = (reactions[def.id] || 0) + (def.icon !== def.id ? reactions[def.icon] || 0 : 0);
+      const selected = chosenId === def.id;
       const b = el("button", "rn-vn-react-btn");
       b.type = "button";
       b.dataset.active = cnt > 0 ? "1" : "0";
-      b.title = this.t("vn_reactions_hint");
-      b.appendChild(el("span", "", emoji));
+      b.setAttribute("aria-pressed", selected ? "true" : "false");
+      b.title = def.label !== def.icon ? `${def.label}（${this.t("vn_reactions_msg_hint")}）` : this.t("vn_reactions_msg_hint");
+      b.appendChild(el("span", "", def.icon));
       if (cnt > 0) b.appendChild(el("span", "rn-vn-react-cnt", String(cnt)));
-      b.addEventListener("click", () => save({ reactionDelta: { emoji, delta: 1 } }));
-      b.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        if (cnt > 0) save({ reactionDelta: { emoji, delta: -1 } });
+      b.addEventListener("click", () => {
+        if (activeMsgKey) {
+          const prev = this.messageReactions.get(activeMsgKey) || null;
+          if (prev === def.id) {
+            this.messageReactions.delete(activeMsgKey);
+            save({ reactionDeltas: [{ key: def.id, delta: -1 }] });
+          } else if (prev) {
+            this.messageReactions.set(activeMsgKey, def.id);
+            save({ reactionDeltas: [{ key: prev, delta: -1 }, { key: def.id, delta: 1 }] });
+          } else {
+            this.messageReactions.set(activeMsgKey, def.id);
+            save({ reactionDeltas: [{ key: def.id, delta: 1 }] });
+          }
+        } else {
+          save({ reactionDeltas: [{ key: def.id, delta: 1 }] });
+        }
       });
       reactBox.appendChild(b);
     });
     panel.appendChild(reactBox);
-    const reactAddRow = el("div", "rn-vn-row");
-    reactAddRow.style.marginTop = "6px";
-    const customEmoji = el("input");
-    customEmoji.type = "text";
-    customEmoji.maxLength = ViewerModel.LIMITS.REACTION_KEY;
-    customEmoji.placeholder = this.t("vn_reaction_add_ph");
-    customEmoji.dataset.rnVnField = "react";
-    const addEmojiBtn = el("button", "", "+1");
-    addEmojiBtn.type = "button";
-    const commitEmoji = () => {
-      const em = customEmoji.value.trim();
-      if (!em) return;
-      customEmoji.value = "";
-      save({ reactionDelta: { emoji: em, delta: 1 } });
-    };
-    addEmojiBtn.addEventListener("click", commitEmoji);
-    customEmoji.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") commitEmoji();
-    });
-    reactAddRow.append(customEmoji, addEmojiBtn);
-    if (totalReact > 0) {
-      const resetReact = el("button", "", this.t("vn_score_reset"));
-      resetReact.type = "button";
-      resetReact.addEventListener("click", () => save({ clearReactions: true }));
-      reactAddRow.appendChild(resetReact);
-    }
-    panel.appendChild(reactAddRow);
-    panel.appendChild(el("div", "rn-vn-hint", this.t("vn_reactions_hint")));
+    panel.appendChild(el("div", "rn-vn-hint", this.t("vn_reactions_msg_hint")));
 
     // 標籤
     panel.appendChild(el("h4", "", this.t("vn_tags")));

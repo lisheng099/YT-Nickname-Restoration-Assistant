@@ -217,3 +217,26 @@ test("表情統計：點擊累進、減一歸零、清空與匯出匯入", () =>
   assert.equal(cleared.record, null);
 });
 
+test("反應項目定義：視窗簡稱對應後台詞語、同留言切換與匯出匯入", () => {
+  const idx = new ViewerIndex();
+  const coldId = ViewerModel.newReactionId(idx.reactionDefs);
+  idx.setReactionDefs([...idx.reactionDefs, { id: coldId, icon: "冷", label: "冷笑話" }]);
+  assert.equal(idx.reactionDefs.find((d) => d.id === coldId).label, "冷笑話");
+
+  // 模擬同則留言先點 r_like 再切換成「冷」
+  idx.patch({ channelId: UC_A }, { reactionDeltas: [{ key: "r_like", delta: 1 }] }, 10);
+  const swapped = idx.patch(
+    { channelId: UC_A },
+    { reactionDeltas: [{ key: "r_like", delta: -1 }, { key: coldId, delta: 1 }] },
+    20
+  );
+  assert.deepEqual(swapped.record.reactions, { [coldId]: 1 });
+
+  // 匯出再取代匯入，自訂反應定義保留
+  const exported = idx.exportData(30);
+  const idx2 = new ViewerIndex();
+  idx2.importData(exported, "replace");
+  assert.deepEqual(idx2.reactionDefs.find((d) => d.id === coldId), { id: coldId, icon: "冷", label: "冷笑話" });
+});
+
+

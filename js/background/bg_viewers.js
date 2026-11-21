@@ -9,6 +9,7 @@ const BgViewers = {
   DB_NAME: "yt_viewer_notes_db",
   STORE_NAME: "viewers",
   TAGS_KEY: "__tags__",
+  REACTION_DEFS_KEY: "__reaction_defs__",
   REV_KEY: "yt_viewer_notes_rev",
 
   index: new ViewerModel.ViewerIndex(),
@@ -22,12 +23,14 @@ const BgViewers = {
           this.store = idbKeyval.createStore(this.DB_NAME, this.STORE_NAME);
           const entries = await idbKeyval.entries(this.store);
           let tags = [];
+          let reactionDefs = null;
           const records = [];
           for (const [key, val] of entries) {
             if (key === this.TAGS_KEY) tags = val;
+            else if (key === this.REACTION_DEFS_KEY) reactionDefs = val;
             else records.push(val);
           }
-          this.index.load(records, tags);
+          this.index.load(records, tags, reactionDefs);
         } catch (e) {
           Logger.red("[BgViewers] 載入失敗:", e);
         }
@@ -71,6 +74,7 @@ const BgViewers = {
     return {
       records: list.map((id) => this.index.find(this.withCachedChannelId(id))),
       tags: this.index.tags,
+      reactionDefs: this.index.reactionDefs,
     };
   },
 
@@ -124,6 +128,18 @@ const BgViewers = {
     return this.index.tags;
   },
 
+  setReactionDefs: async function (defs) {
+    await this.ready();
+    this.index.setReactionDefs(defs);
+    try {
+      await idbKeyval.set(this.REACTION_DEFS_KEY, this.index.reactionDefs, this.store);
+    } catch (e) {
+      Logger.red("[BgViewers] 反應項目寫入失敗:", e);
+    }
+    this.bumpRev();
+    return this.index.reactionDefs;
+  },
+
   // 表情次數最高的觀眾 (聊天室小榜用)
   top: async function (limit) {
     await this.ready();
@@ -141,7 +157,7 @@ const BgViewers = {
 
   list: async function () {
     await this.ready();
-    return { viewers: this.index.list(), tags: this.index.tags };
+    return { viewers: this.index.list(), tags: this.index.tags, reactionDefs: this.index.reactionDefs };
   },
 
   exportData: async function () {
@@ -154,6 +170,7 @@ const BgViewers = {
     const result = this.index.importData(data, mode);
     await idbKeyval.clear(this.store);
     await idbKeyval.set(this.TAGS_KEY, this.index.tags, this.store);
+    await idbKeyval.set(this.REACTION_DEFS_KEY, this.index.reactionDefs, this.store);
     await this.persist(this.index.list(), []);
     this.bumpRev();
     return result;
@@ -161,8 +178,9 @@ const BgViewers = {
 
   clear: async function () {
     await this.ready();
-    this.index.load([], []);
+    this.index.load([], [], this.index.reactionDefs);
     await idbKeyval.clear(this.store);
+    await idbKeyval.set(this.REACTION_DEFS_KEY, this.index.reactionDefs, this.store);
     this.bumpRev();
   },
 
@@ -184,6 +202,8 @@ const BgViewers = {
         return run(this.remove(request.key));
       case "VN_TAGS_SET":
         return run(this.setTags(request.tags));
+      case "VN_REACTION_DEFS_SET":
+        return run(this.setReactionDefs(request.reactionDefs));
       case "VN_TOP":
         return run(this.top(request.limit));
       case "VN_LIST":

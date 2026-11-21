@@ -9,7 +9,14 @@
   const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
   const COLOR = /^#[0-9a-fA-F]{6}$/;
 
-  const DEFAULT_REACTIONS = ["👍", "😂", "😢", "😡", "👎"];
+  const DEFAULT_REACTION_DEFS = [
+    { id: "r_like", icon: "👍", label: "讚" },
+    { id: "r_laugh", icon: "😂", label: "笑" },
+    { id: "r_sad", icon: "😢", label: "哭" },
+    { id: "r_angry", icon: "😡", label: "怒" },
+    { id: "r_boo", icon: "👎", label: "噓" },
+  ];
+  const DEFAULT_REACTIONS = DEFAULT_REACTION_DEFS.map((d) => d.icon);
 
   const LIMITS = {
     NICKNAME: 50,
@@ -22,7 +29,10 @@
     SCORE: 1000000,
     REACTION_COUNT: 1000000,
     REACTIONS_PER_VIEWER: 30,
-    REACTION_KEY: 16,
+    REACTION_DEFS: 30,
+    REACTION_KEY: 40,
+    REACTION_ICON: 8,
+    REACTION_LABEL: 20,
     VIEWERS: 50000,
     EXT_TAGS: 20,
   };
@@ -52,6 +62,33 @@
   function normalizeReactionKey(value) {
     if (typeof value !== "string") return "";
     return value.trim().slice(0, LIMITS.REACTION_KEY);
+  }
+
+  function normalizeReactionDef(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const id = text(raw.id, 40);
+    const icon = text(raw.icon, LIMITS.REACTION_ICON);
+    const label = text(raw.label, LIMITS.REACTION_LABEL) || icon;
+    if (!id || !icon) return null;
+    return { id, icon, label };
+  }
+
+  function normalizeReactionDefs(list) {
+    const out = [];
+    const seen = new Set();
+    if (!Array.isArray(list)) return out;
+    for (const raw of list) {
+      const def = normalizeReactionDef(raw);
+      if (!def || seen.has(def.id)) continue;
+      seen.add(def.id);
+      out.push(def);
+      if (out.length >= LIMITS.REACTION_DEFS) break;
+    }
+    return out;
+  }
+
+  function defaultReactionDefs() {
+    return DEFAULT_REACTION_DEFS.map((d) => ({ ...d }));
   }
 
   function normalizeReactions(raw) {
@@ -198,12 +235,14 @@
       this.byKey = new Map();
       this.byHandle = new Map(); // handle -> key
       this.tags = [];
+      this.reactionDefs = defaultReactionDefs();
     }
 
-    load(records, tags) {
+    load(records, tags, reactionDefs) {
       this.byKey.clear();
       this.byHandle.clear();
       this.tags = normalizeTagDefs(tags);
+      this.reactionDefs = Array.isArray(reactionDefs) ? normalizeReactionDefs(reactionDefs) : defaultReactionDefs();
       for (const raw of records || []) {
         const rec = normalizeRecord(raw);
         if (rec) this._put(rec);
@@ -303,7 +342,7 @@
       if (p.reactions !== undefined) rec.reactions = normalizeReactions(p.reactions);
       if (p.clearReactions) rec.reactions = {};
       if (p.reactionDelta && typeof p.reactionDelta === "object") {
-        const key = normalizeReactionKey(p.reactionDelta.emoji);
+        const key = normalizeReactionKey(p.reactionDelta.key || p.reactionDelta.emoji);
         const delta = Math.round(Number(p.reactionDelta.delta));
         if (key && Number.isFinite(delta) && delta !== 0) {
           const next = { ...(rec.reactions || {}) };
@@ -312,6 +351,19 @@
           else delete next[key];
           rec.reactions = normalizeReactions(next);
         }
+      }
+      if (Array.isArray(p.reactionDeltas)) {
+        const next = { ...(rec.reactions || {}) };
+        for (const item of p.reactionDeltas) {
+          if (!item || typeof item !== "object") continue;
+          const key = normalizeReactionKey(item.key || item.emoji);
+          const delta = Math.round(Number(item.delta));
+          if (!key || !Number.isFinite(delta) || delta === 0) continue;
+          const val = Math.max(0, Math.min(LIMITS.REACTION_COUNT, (next[key] || 0) + delta));
+          if (val > 0) next[key] = val;
+          else delete next[key];
+        }
+        rec.reactions = normalizeReactions(next);
       }
       if (p.ext !== undefined) rec.ext = p.ext;
       // 只保留仍存在的標籤
@@ -355,11 +407,18 @@
       return { changed, removedKeys };
     }
 
+    /** 更新反應項目定義 (視窗顯示 icon 對應後台顯示詞語 label)。 */
+    setReactionDefs(defs) {
+      this.reactionDefs = normalizeReactionDefs(defs);
+      return this.reactionDefs;
+    }
+
     exportData(now = Date.now()) {
       return {
         format: FORMAT,
         exported_at: new Date(now).toISOString(),
         tags: this.tags.map((t) => ({ ...t })),
+        reactionDefs: this.reactionDefs.map((d) => ({ ...d })),
         viewers: this.list().map((r) => ({
           channelId: r.channelId,
           handle: r.handle,
@@ -385,14 +444,22 @@
         throw new Error("format");
       }
       const incomingTags = normalizeTagDefs(data.tags);
+      const hasReactionDefs = Array.isArray(data.reactionDefs);
+      const incomingReactionDefs = hasReactionDefs ? normalizeReactionDefs(data.reactionDefs) : null;
       if (mode === "replace") {
         this.byKey.clear();
         this.byHandle.clear();
         this.tags = incomingTags;
+        this.reactionDefs = incomingReactionDefs || defaultReactionDefs();
       } else {
         const merged = new Map(this.tags.map((t) => [t.id, t]));
         incomingTags.forEach((t) => merged.set(t.id, t));
         this.tags = [...merged.values()].slice(0, LIMITS.TAGS);
+        if (incomingReactionDefs) {
+          const mergedR = new Map(this.reactionDefs.map((d) => [d.id, d]));
+          incomingReactionDefs.forEach((d) => mergedR.set(d.id, d));
+          this.reactionDefs = [...mergedR.values()].slice(0, LIMITS.REACTION_DEFS);
+        }
       }
       const known = new Set(this.tags.map((t) => t.id));
       let imported = 0;
@@ -439,8 +506,19 @@
     return id;
   }
 
+  /** 產生不與現有反應項目重複的 id */
+  function newReactionId(existing) {
+    const used = new Set((existing || []).map((d) => d.id));
+    let id;
+    do {
+      id = "r" + Math.random().toString(36).slice(2, 10);
+    } while (used.has(id));
+    return id;
+  }
+
   const api = {
     FORMAT,
+    DEFAULT_REACTION_DEFS,
     DEFAULT_REACTIONS,
     LIMITS,
     ViewerIndex,
@@ -448,12 +526,15 @@
     normalizeChannelId,
     normalizeHandle,
     normalizeTagDefs,
+    normalizeReactionDefs,
+    defaultReactionDefs,
     normalizeReactions,
     totalReactions,
     normalizeExt,
     mergeRecords,
     isEmpty,
     newTagId,
+    newReactionId,
   };
   root.ViewerModel = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
