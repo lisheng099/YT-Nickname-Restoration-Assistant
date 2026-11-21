@@ -93,6 +93,7 @@ const ViewerNotes = {
     if (this.started || !document.body) return;
     this.started = true;
     this.injectStyle();
+    this.loadAllowedChannels();
     this.bindAvatar();
     this.scan(document.body);
     this.renderDock();
@@ -215,6 +216,10 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       if (m.type !== "childList") continue;
       for (const node of m.addedNodes) {
         if (node.nodeType !== 1) continue;
+        if (node.matches("yt-emoji-picker-category-renderer")) {
+          this.harvestEmotes(node);
+          continue;
+        }
         if (node.matches(this.hostSelector)) {
           this.queue.add(node);
           found = true;
@@ -373,11 +378,45 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     return el;
   },
 
-  // 被動收集聊天室出現的 YouTube 頻道自訂貼圖 (yt3.ggpht.com)，供管理頁「反應項目設定」一鍵挑選
+  // 僅在 YouTube Studio 直播控制室或主播自己綁定的頻道聊天室收集頻道貼圖 (yt3.ggpht.com)，不收集其他頻道的貼圖
   seenEmotes: new Map(),
   emoteSaveTimer: null,
-  harvestEmotes: function (host) {
-    const imgs = host.querySelectorAll('img.emoji[src*="yt3.ggpht.com"], img[src*="yt3.ggpht.com/"]');
+  allowedChannels: null, // Set<string> | null (loaded from sm_allowed_channels)
+  isOwnChannelForEmotes: function () {
+    const inStudio =
+      location.hostname === "studio.youtube.com" ||
+      (typeof document !== "undefined" && typeof document.referrer === "string" && document.referrer.includes("studio.youtube.com"));
+    if (inStudio) return true;
+    if (!this.allowedChannels || this.allowedChannels.size === 0) return false;
+    // Check if the live chat page or parent exposes the channel id
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href") || "";
+    const metaCid = document.querySelector('meta[itemprop="channelId"]')?.getAttribute("content") || "";
+    if (metaCid && this.allowedChannels.has(metaCid)) return true;
+    for (const cid of this.allowedChannels) {
+      if (canonical.includes(cid)) return true;
+    }
+    return false;
+  },
+  loadAllowedChannels: function () {
+    try {
+      chrome.storage.local.get("sm_allowed_channels", (res) => {
+        const list = res && Array.isArray(res.sm_allowed_channels) ? res.sm_allowed_channels : [];
+        this.allowedChannels = new Set(list.filter((c) => typeof c === "string"));
+      });
+    } catch (e) {
+      this.allowedChannels = new Set();
+    }
+  },
+  harvestEmotes: function (rootNode) {
+    if (this.allowedChannels === null) {
+      this.loadAllowedChannels();
+      return;
+    }
+    if (!this.isOwnChannelForEmotes()) return;
+    const scope = rootNode || document;
+    const imgs = scope.querySelectorAll(
+      'img.emoji[src*="yt3.ggpht.com"], yt-emoji-picker-category-renderer img[src*="yt3.ggpht.com"]'
+    );
     let changed = false;
     for (const img of imgs) {
       if (img.closest("#author-photo")) continue;
