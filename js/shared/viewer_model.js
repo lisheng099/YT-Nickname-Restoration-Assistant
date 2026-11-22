@@ -174,9 +174,24 @@
       }
     }
     const aiTags = uniqueStrings(raw.aiTags, LIMITS.TAG_LABEL, LIMITS.EXT_TAGS);
+    const aiDetails = [];
+    if (Array.isArray(raw.aiDetails)) {
+      for (const d of raw.aiDetails) {
+        if (!d || typeof d !== "object") continue;
+        const t = text(d.text, LIMITS.TAG_LABEL);
+        if (!t) continue;
+        const quote = text(d.quote, 80);
+        const videoId = typeof d.videoId === "string" && /^[A-Za-z0-9_-]{11}$/.test(d.videoId) ? d.videoId : null;
+        const offsetSec = Number.isFinite(Number(d.offsetSec)) && Number(d.offsetSec) >= 0 ? Math.floor(Number(d.offsetSec)) : null;
+        aiDetails.push({ text: t, quote, videoId, offsetSec });
+        if (aiDetails.length >= LIMITS.EXT_TAGS) break;
+      }
+    }
     const name = text(raw.name, LIMITS.NAME);
-    if (tags.length === 0 && aiTags.length === 0 && !name) return null;
-    return { tags, aiTags, name };
+    if (tags.length === 0 && aiTags.length === 0 && aiDetails.length === 0 && !name) return null;
+    const out = { tags, aiTags, name };
+    if (aiDetails.length > 0) out.aiDetails = aiDetails;
+    return out;
   }
 
   function normalizeRecord(raw) {
@@ -188,7 +203,7 @@
     const updatedAt = Number.isFinite(Number(raw.updatedAt)) && Number(raw.updatedAt) > 0 ? Number(raw.updatedAt) : 0;
     const nicknameAt =
       Number.isFinite(Number(raw.nicknameAt)) && Number(raw.nicknameAt) > 0 ? Number(raw.nicknameAt) : updatedAt;
-    return {
+    const rec = {
       key: channelId || handle,
       channelId,
       handle,
@@ -202,6 +217,7 @@
       updatedAt,
       ext: normalizeExt(raw.ext),
     };
+    return rec;
   }
 
   function isEmpty(rec) {

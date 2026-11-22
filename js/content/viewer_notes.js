@@ -175,6 +175,10 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
 .rn-vn-react-chip{display:inline-flex;align-items:center;gap:2px;background:rgba(62,166,255,.18);color:inherit}
 .rn-vn-react-img{width:16px;height:16px;object-fit:contain;vertical-align:middle;border-radius:2px}
 #rn-vn-panel .rn-vn-react-img{width:18px;height:18px}
+#rn-vn-panel .rn-vn-ai-line{display:flex;align-items:baseline;gap:4px;font-size:12px;line-height:1.35;margin-top:3px;word-break:break-word}
+#rn-vn-panel .rn-vn-ai-quote{opacity:.72;font-size:11px}
+#rn-vn-panel .rn-vn-ai-link,#rn-vn-dock .rn-vn-ai-link{display:inline-block;margin-left:3px;padding:0 5px;border-radius:6px;font-size:11px;font-variant-numeric:tabular-nums;text-decoration:none;background:rgba(62,166,255,.18);color:#3ea6ff;white-space:nowrap}
+#rn-vn-panel .rn-vn-ai-link:hover,#rn-vn-dock .rn-vn-ai-link:hover{background:rgba(62,166,255,.32)}
 #rn-vn-dock{position:fixed;right:8px;bottom:64px;z-index:2147483645;font:12px/1.45 Roboto,Arial,sans-serif;color:#222}
 #rn-vn-dock.rn-vn-dark{color:#eee}
 #rn-vn-dock button{all:unset;cursor:pointer;box-sizing:border-box}
@@ -573,7 +577,8 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
         this.openPanel(
           { ...this.plain(identity), name: identity.name, idKey: identity.idKey },
           edit,
-          this.messageKeyOf(host)
+          this.messageKeyOf(host),
+          host
         );
       });
       box.appendChild(edit);
@@ -607,7 +612,8 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       this.openPanel(
         { ...this.plain(identity), name: identity.name, idKey: identity.idKey },
         avatar,
-        this.messageKeyOf(host)
+        this.messageKeyOf(host),
+        host
       );
     };
     ["click", "keydown"].forEach((type) => document.addEventListener(type, this.avatarHandler, true));
@@ -726,7 +732,13 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       item.appendChild(head);
       if (tab !== "top") {
         record.notes.forEach((n) => item.appendChild(el("div", "rn-vn-dock-note", "📌 " + n)));
-        if (record.ext) record.ext.aiTags.forEach((t) => item.appendChild(el("div", "rn-vn-dock-note", "🤖 " + t)));
+        if (record.ext) {
+          if (Array.isArray(record.ext.aiDetails) && record.ext.aiDetails.length > 0) {
+            record.ext.aiDetails.forEach((d) => item.appendChild(this.renderAiDetailLine(d, "rn-vn-dock-note")));
+          } else {
+            record.ext.aiTags.forEach((t) => item.appendChild(el("div", "rn-vn-dock-note", "🤖 " + t)));
+          }
+        }
       }
       body.appendChild(item);
     });
@@ -736,16 +748,99 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     dock.replaceChildren(body, toggle);
   },
 
+  formatOffset: function (sec) {
+    const s = Math.max(0, Math.floor(Number(sec) || 0));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    const pad = (n) => (n < 10 ? "0" + n : String(n));
+    return h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${pad(m)}:${pad(r)}`;
+  },
+
+  renderAiDetailLine: function (d, cls) {
+    const row = document.createElement("div");
+    row.className = cls || "rn-vn-ai-line";
+    const main = document.createElement("span");
+    main.textContent = "🤖 " + d.text;
+    row.appendChild(main);
+    if (d.quote) {
+      const q = document.createElement("span");
+      q.className = "rn-vn-ai-quote";
+      const shortQuote = d.quote.length > 26 ? d.quote.slice(0, 26) + "…" : d.quote;
+      q.textContent = ` · 「${shortQuote}」`;
+      q.title = d.quote;
+      row.appendChild(q);
+    }
+    if (d.videoId) {
+      const a = document.createElement("a");
+      a.className = "rn-vn-ai-link";
+      const tSec = Number.isFinite(Number(d.offsetSec)) && Number(d.offsetSec) > 0 ? Math.floor(Number(d.offsetSec)) : 0;
+      a.href = `https://www.youtube.com/watch?v=${encodeURIComponent(d.videoId)}${tSec > 0 ? `&t=${tSec}s` : ""}`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = tSec > 0 ? `▶ ${this.formatOffset(tSec)}` : "▶ 原片";
+      a.title = d.quote ? `${d.quote} (${a.textContent})` : a.textContent;
+      row.appendChild(a);
+    }
+    return row;
+  },
+
+  detectVideoId: function () {
+    try {
+      const u = new URL(location.href);
+      const v = u.searchParams.get("v");
+      if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+    } catch (e) {}
+    try {
+      if (document.referrer) {
+        const ref = new URL(document.referrer);
+        const rv = ref.searchParams.get("v");
+        if (rv && /^[A-Za-z0-9_-]{11}$/.test(rv)) return rv;
+        const m = ref.pathname.match(/\/video\/([A-Za-z0-9_-]{11})\//);
+        if (m) return m[1];
+      }
+    } catch (e) {}
+    return null;
+  },
+
+  extractHostMessage: function (host) {
+    if (!host) return { text: "", offsetSec: null };
+    const msgEl = host.querySelector("#message");
+    let text = "";
+    if (msgEl) {
+      const parts = [];
+      msgEl.childNodes.forEach((n) => {
+        if (n.nodeType === 3) parts.push(n.nodeValue || "");
+        else if (n.nodeType === 1 && n.tagName === "IMG") {
+          const alt = n.getAttribute("alt") || n.getAttribute("shared-tooltip-text") || "";
+          if (alt) parts.push(alt);
+        } else if (n.nodeType === 1) {
+          parts.push(n.textContent || "");
+        }
+      });
+      text = parts.join("").trim().slice(0, 300);
+    }
+    let offsetSec = null;
+    const tsText = (host.querySelector("#timestamp")?.textContent || "").trim();
+    if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(tsText) && !/[AP]M/i.test(tsText)) {
+      const segs = tsText.split(":").map((x) => parseInt(x, 10));
+      if (segs.length === 3) offsetSec = segs[0] * 3600 + segs[1] * 60 + segs[2];
+      else if (segs.length === 2 && segs[0] < 12) offsetSec = segs[0] * 60 + segs[1];
+    }
+    return { text, offsetSec };
+  },
+
   // ---------------------------------------------------------------- 編輯面板
   closePanel: function () {
     if (this.panel) this.panel.remove();
     this.panel = null;
     this.panelIdentity = null;
     this.panelMsgKey = null;
+    this.panelHost = null;
   },
 
   // anchor 為 null 時表示就地重畫 (保留位置與目前留言 key)
-  openPanel: async function (identity, anchor, msgKey) {
+  openPanel: async function (identity, anchor, msgKey, host) {
     const res = await this.send({
       type: "VN_LOOKUP",
       ids: [this.plain(identity)],
@@ -793,7 +888,9 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     }
     this.panelIdentity = identity;
     if (msgKey !== undefined) this.panelMsgKey = msgKey;
+    if (host !== undefined) this.panelHost = host;
     const activeMsgKey = this.panelMsgKey;
+    const activeHost = this.panelHost;
     panel.classList.toggle("rn-vn-dark", document.documentElement.hasAttribute("dark"));
     panel.replaceChildren();
 
@@ -851,6 +948,26 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
       el("h4", "", totalReact > 0 ? `${this.t("vn_reactions")} (${totalReact})` : this.t("vn_reactions"))
     );
     const reactBox = el("div", "rn-vn-reactions");
+    const emitHighlight = (reactionDef) => {
+      const videoId = this.detectVideoId();
+      if (!videoId || !activeMsgKey) return;
+      const msgInfo = this.extractHostMessage(activeHost);
+      this.send({
+        type: "SM_HIGHLIGHT",
+        highlight: {
+          video_id: videoId,
+          msg_key: activeMsgKey,
+          reaction_id: reactionDef ? reactionDef.id : null,
+          reaction_label: reactionDef ? reactionDef.label : "",
+          reaction_icon: reactionDef ? reactionDef.icon : "",
+          author_name: identity.name || record.customNickname || record.name || identity.handle || identity.channelId || "",
+          author_channel_id: identity.channelId || null,
+          message: msgInfo.text,
+          offset_sec: msgInfo.offsetSec,
+          created_at: new Date().toISOString(),
+        },
+      });
+    };
     defsList.forEach((def) => {
       const cnt = (reactions[def.id] || 0) + (def.icon !== def.id ? reactions[def.icon] || 0 : 0);
       const selected = chosenId === def.id;
@@ -867,9 +984,11 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
           if (prev === def.id) {
             this.messageReactions.delete(activeMsgKey);
             save({ reactionDeltas: [{ key: def.id, delta: -1 }] });
+            emitHighlight(null);
           } else if (prev) {
             this.messageReactions.set(activeMsgKey, def.id);
             save({ reactionDeltas: [{ key: prev, delta: -1 }, { key: def.id, delta: 1 }] });
+            emitHighlight(def);
           } else {
             if (this.messageReactions.size >= 2000) {
               const oldest = this.messageReactions.keys().next().value;
@@ -877,6 +996,7 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
             }
             this.messageReactions.set(activeMsgKey, def.id);
             save({ reactionDeltas: [{ key: def.id, delta: 1 }] });
+            emitHighlight(def);
           }
         } else {
           save({ reactionDeltas: [{ key: def.id, delta: 1 }] });
@@ -934,13 +1054,20 @@ ${avatarHover},[${this.AVATAR_ATTR}]:focus-visible::after{opacity:1}
     newRow.append(newTag, color, addTag);
     panel.appendChild(newRow);
 
-    // 由附加模組提供的唯讀標籤
-    if (record.ext && (record.ext.tags.length || record.ext.aiTags.length)) {
+    // 由附加模組提供的唯讀標籤與精簡 AI 記憶出處
+    if (record.ext && (record.ext.tags.length || record.ext.aiTags.length || (record.ext.aiDetails && record.ext.aiDetails.length))) {
       panel.appendChild(el("h4", "", this.t("vn_ext_tags")));
-      const extBox = el("div", "rn-vn-tags");
-      record.ext.tags.forEach((t) => extBox.appendChild(this.chip(t.label, t.color, "rn-vn-ext")));
-      record.ext.aiTags.forEach((t) => extBox.appendChild(this.chip(t, "", "rn-vn-ext")));
-      panel.appendChild(extBox);
+      if (record.ext.tags.length || (!record.ext.aiDetails && record.ext.aiTags.length)) {
+        const extBox = el("div", "rn-vn-tags");
+        record.ext.tags.forEach((t) => extBox.appendChild(this.chip(t.label, t.color, "rn-vn-ext")));
+        if (!record.ext.aiDetails || !record.ext.aiDetails.length) {
+          record.ext.aiTags.forEach((t) => extBox.appendChild(this.chip(t, "", "rn-vn-ext")));
+        }
+        panel.appendChild(extBox);
+      }
+      if (Array.isArray(record.ext.aiDetails) && record.ext.aiDetails.length > 0) {
+        record.ext.aiDetails.forEach((d) => panel.appendChild(this.renderAiDetailLine(d, "rn-vn-ai-line")));
+      }
     }
 
     // 備註
