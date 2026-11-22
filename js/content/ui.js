@@ -59,13 +59,23 @@ const TooltipManager = {
     const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
     const badge = this.getBadgeIcon(numSubs);
     if (badge) {
-      target.style.display = "inline-flex";
-      target.style.alignItems = "center";
-      target.style.gap = "4px";
-      target.appendChild(span);
-      target.appendChild(badge);
+      if (target.dataset.rnInPlaceDual === "1") {
+        const wrap = document.createElement("span");
+        wrap.style.display = "inline-flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "4px";
+        wrap.appendChild(span);
+        wrap.appendChild(badge);
+        target.appendChild(wrap);
+      } else {
+        target.style.display = "inline-flex";
+        target.style.alignItems = "center";
+        target.style.gap = "4px";
+        target.appendChild(span);
+        target.appendChild(badge);
+      }
     } else {
-      target.style.display = "";
+      if (target.dataset.rnInPlaceDual !== "1") target.style.display = "";
       target.appendChild(span);
     }
 
@@ -81,8 +91,12 @@ const TooltipManager = {
   //       不會被我們清空；換人時只需更新獨立節點，不會殘留上一位的內容。
   // =======================================================
   DUAL_CLASS: "rn-restored-name",
+  NATIVE_HIDDEN_CLASS: "rn-native-hidden",
 
   findDualNode: function (target) {
+    if (target.dataset && target.dataset.rnDual === "inside") {
+      return target.querySelector(":scope > ." + this.DUAL_CLASS);
+    }
     const prev = target.previousElementSibling;
     return prev && prev.classList && prev.classList.contains(this.DUAL_CLASS)
       ? prev
@@ -130,6 +144,76 @@ const TooltipManager = {
     else delete target.dataset.rnExpired;
   },
 
+  // =======================================================
+  // [模式 1-C] renderDualInside (容器內雙節點替換)
+  // 用途：保留原生目標元素本身的定位與 CSS (如頂部跑馬燈 #text 在
+  //       #animation-container 內的間距、置中與 #stats-bar 切換動畫)，
+  //       改於目標元素內部以隱藏容器封裝原有子節點，避免在父容器插入兄弟節點造成跑版。
+  // =======================================================
+  renderDualInside: function (target, handle, displayName, fullName, subs, isExpired) {
+    if (!target.isConnected) return;
+
+    const sibling = target.previousElementSibling;
+    if (sibling && sibling.classList && sibling.classList.contains(this.DUAL_CLASS)) {
+      sibling.remove();
+      target.style.removeProperty("display");
+    }
+
+    let node = target.querySelector(":scope > ." + this.DUAL_CLASS);
+    let hidden = target.querySelector(":scope > ." + this.NATIVE_HIDDEN_CLASS);
+    const hadHidden = !!hidden;
+
+    if (!hidden) {
+      hidden = document.createElement("span");
+      hidden.className = this.NATIVE_HIDDEN_CLASS;
+      hidden.style.setProperty("display", "none", "important");
+    }
+
+    const toMove = [];
+    for (const child of Array.from(target.childNodes)) {
+      if (child !== node && child !== hidden) toMove.push(child);
+    }
+    if (toMove.length > 0) {
+      if (hadHidden) hidden.textContent = "";
+      toMove.forEach((child) => hidden.appendChild(child));
+    }
+
+    if (!node) {
+      node = document.createElement("span");
+      node.className = this.DUAL_CLASS;
+      target.insertBefore(node, target.firstChild);
+    }
+    if (!hidden.parentNode) {
+      target.appendChild(hidden);
+    }
+
+    node.textContent = "";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = displayName;
+    nameSpan.dataset.rnSpan = "1";
+    this.applyTextStyle(nameSpan, null, isExpired);
+    if (this.canCopy) this.bindCopyEvent(nameSpan, handle);
+    node.appendChild(nameSpan);
+
+    const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
+    const badge = this.getBadgeIcon(numSubs);
+    if (badge) {
+      node.style.display = "inline-flex";
+      node.style.alignItems = "center";
+      node.style.gap = "4px";
+      node.appendChild(badge);
+    } else {
+      node.style.display = "";
+    }
+    delete target.dataset.rnBound;
+    this.attachData(node, handle, fullName, subs, isExpired);
+
+    target.dataset.rnReplaced = "yes";
+    target.dataset.rnDual = "inside";
+    if (isExpired) target.dataset.rnExpired = "true";
+    else delete target.dataset.rnExpired;
+  },
+
   NATIVE_STYLE_PROPS: [
     "color",
     "font-family",
@@ -160,6 +244,22 @@ const TooltipManager = {
 
   // 還原：移除獨立節點並顯示原生節點 (原生文字不是 handle 時使用)
   restoreDual: function (target) {
+    if (target.dataset && target.dataset.rnDual === "inside") {
+      const node = target.querySelector(":scope > ." + this.DUAL_CLASS);
+      if (node) node.remove();
+      const hidden = target.querySelector(":scope > ." + this.NATIVE_HIDDEN_CLASS);
+      if (hidden) {
+        while (hidden.firstChild) {
+          target.insertBefore(hidden.firstChild, hidden);
+        }
+        hidden.remove();
+      }
+      delete target.dataset.rnDual;
+      delete target.dataset.rnReplaced;
+      delete target.dataset.rnExpired;
+      delete target.dataset.rnTargetHandle;
+      return;
+    }
     const node = this.findDualNode(target);
     if (node) node.remove();
     target.style.removeProperty("display");

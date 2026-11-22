@@ -89,11 +89,13 @@ class PageScanner {
         // 頂部跑馬燈：Super Chat (SC) 付費訊息
         sel: "yt-live-chat-ticker-paid-message-item-renderer #text",
         mode: this.MODE.STANDARD,
+        inPlaceDual: true,
       },
       {
         // 頂部跑馬燈：會員加入/贊助訊息
         sel: "yt-live-chat-ticker-sponsor-item-renderer #text",
         mode: this.MODE.STANDARD,
+        inPlaceDual: true,
       },
 
       // --- 🔴 直播聊天室：訊息列表內容 ---
@@ -162,7 +164,7 @@ class PageScanner {
   }
 
   init() {
-    if (window === window.top || location.pathname.includes("live_chat")) {
+    if (window === window.top || location.pathname.startsWith("/live_chat")) {
       I18n.init().then(() => {
         // 改為非同步等待設定載入完成
         this.loadConfig().then(() => {
@@ -281,6 +283,10 @@ class PageScanner {
       this.observer.disconnect();
       this.observer = null;
     }
+    if (this.inPlaceObserver) {
+      this.inPlaceObserver.disconnect();
+      this.inPlaceObserver = null;
+    }
     this.isScanning = false;
     // 清空佇列以防殘留任務
     this.mutationQueue.clear();
@@ -305,10 +311,10 @@ class PageScanner {
           if (node.nodeType === 1) {
             const tag = node.tagName.toLowerCase();
             if (
-              tag.includes("yt-live-chat") ||
-              tag.includes("ytd-comment") ||
-              tag.includes("ytd-item-section-renderer") ||
-              tag.includes("ytd-pinned-comment")
+              tag.startsWith("yt-live-chat") ||
+              tag.startsWith("ytd-comment") ||
+              tag === "ytd-item-section-renderer" ||
+              tag.startsWith("ytd-pinned-comment")
             ) {
               this.mutationQueue.add(node);
               hasUpdates = true;
@@ -411,6 +417,58 @@ class PageScanner {
     }
   }
 
+  getNativeText(el) {
+    if (el.dataset.rnDual === "inside") {
+      // 若 YouTube 直接在 el 內新增原生節點（非本擴充的節點），優先讀取新內容
+      let extra = "";
+      for (const child of el.childNodes) {
+        if (
+          child.nodeType === 1 &&
+          child.classList &&
+          (child.classList.contains(TooltipManager.DUAL_CLASS) ||
+            child.classList.contains(TooltipManager.NATIVE_HIDDEN_CLASS))
+        ) {
+          continue;
+        }
+        extra += child.textContent || "";
+      }
+      if (extra.trim()) return extra.trim();
+      const hidden = el.querySelector(":scope > ." + TooltipManager.NATIVE_HIDDEN_CLASS);
+      if (hidden) return (hidden.textContent || "").trim();
+    }
+    return (el.textContent || "").trim();
+  }
+
+  observeInPlaceHidden(el) {
+    const hidden = el.querySelector(":scope > ." + TooltipManager.NATIVE_HIDDEN_CLASS);
+    if (!hidden) return;
+    if (!this.inPlaceObserver) {
+      this.inPlaceObserver = new MutationObserver((mutations) => {
+        if (this.fuseFrontendStatus === "TRIPPED") return;
+        let hasUpdates = false;
+        for (const m of mutations) {
+          let cur = m.target;
+          if (cur && cur.nodeType !== 1) cur = cur.parentNode;
+          const box =
+            cur && cur.closest
+              ? cur.closest("." + TooltipManager.NATIVE_HIDDEN_CLASS)
+              : null;
+          const host = box && box.parentElement;
+          if (host && host.matches && host.matches(this.masterSelector)) {
+            this.mutationQueue.add(host);
+            hasUpdates = true;
+          }
+        }
+        if (hasUpdates) this.scheduleBatchProcess();
+      });
+    }
+    this.inPlaceObserver.observe(hidden, {
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+  }
+
   processNode(el) {
     // 如果前端保險絲熔斷，直接不處理任何節點
     if (this.fuseFrontendStatus === "TRIPPED") return;
@@ -419,10 +477,11 @@ class PageScanner {
         const config = this.targetConfigs.find((c) => el.matches(c.sel));
         if (!config) return;
 
-        const rawText = (el.textContent || "").trim();
+        const rawText = this.getNativeText(el);
         const mode = config.mode;
         el.dataset.rnMode = mode;
         if (config.mention) el.dataset.rnMention = "1";
+        if (config.inPlaceDual) el.dataset.rnInPlaceDual = "1";
 
         let handle = null;
 
@@ -447,7 +506,11 @@ class PageScanner {
 
         if (handle) {
           if (handle.length <= 1) return;
-          if (el.dataset.rnReplaced === "yes") {
+          const stillRendered =
+            el.dataset.rnDual === "1" || el.dataset.rnDual === "inside"
+              ? !!TooltipManager.findDualNode(el)
+              : mode !== this.MODE.STANDARD || !!el.querySelector("[data-rn-span]");
+          if (el.dataset.rnReplaced === "yes" && stillRendered) {
             if (
               el.dataset.rnExpired !== "true" &&
               el.dataset.rnTargetHandle === handle
@@ -465,7 +528,7 @@ class PageScanner {
         } else if (!config.mention) {
           if (mode === this.MODE.STANDARD) {
             // 雙節點：原生文字已不是 handle，移除獨立節點並還原顯示
-            if (el.dataset.rnDual === "1") TooltipManager.restoreDual(el);
+            if (el.dataset.rnDual) TooltipManager.restoreDual(el);
             // YouTube 以非 handle 的名稱重新繪製了這個元素：清除上一位留下的狀態
             if (el.dataset.rnReplaced === "yes" && !el.querySelector("[data-rn-span]")) {
               delete el.dataset.rnReplaced;
@@ -609,7 +672,12 @@ class PageScanner {
       default:
         // 目標本身是連結時維持直接替換，否則隱藏原生節點會讓連結無法點擊
         if (this.dualNode && el.dataset.rnMention !== "1" && el.tagName !== "A") {
-          TooltipManager.renderDual(el, handle, displayName, fullName, data.subs, data.isExpired);
+          if (el.dataset.rnInPlaceDual === "1") {
+            TooltipManager.renderDualInside(el, handle, displayName, fullName, data.subs, data.isExpired);
+            this.observeInPlaceHidden(el);
+          } else {
+            TooltipManager.renderDual(el, handle, displayName, fullName, data.subs, data.isExpired);
+          }
           break;
         }
         TooltipManager.renderStandard(
