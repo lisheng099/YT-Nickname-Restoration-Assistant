@@ -176,105 +176,6 @@ function renderData() {
   updateSortUI();
 }
 
-async function handleExport() {
-  const backup = await DataManager.generateBackup();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `yt_names_backup_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function handleImportFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const json = JSON.parse(e.target.result);
-      let dataToImport = json;
-      if (json.meta && json.data) {
-        const isValid = await DataManager.verifyChecksum(json);
-        if (
-          !isValid &&
-          !confirm(I18n.t("import_checksum_fail_confirm"))
-        ) {
-          els.importFile.value = "";
-          return;
-        }
-        dataToImport = json.data;
-      }
-      let count = 0;
-      for (const val of Object.values(dataToImport)) {
-        if (val && (val.name || typeof val === "string")) count++;
-      }
-      if (count === 0) throw new Error(I18n.t("import_invalid_data"));
-      pendingImportData = dataToImport;
-      els.importCount.textContent = count;
-      els.modal.classList.add("active");
-    } catch (err) {
-      alert(I18n.t("import_fail") + I18n.t("import_format_error")); 
-      els.importFile.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-async function finalizeImport(isTrusted) {
-  if (!pendingImportData) return;
-
-  // 1. 鎖定 UI：防止重複點擊，並給予視覺回饋
-  const processingBtn = isTrusted ? els.btnTrust : els.btnSafe;
-  const originalText = processingBtn.innerHTML; // 暫存原本按鈕文字
-  
-  // 停用所有動作按鈕
-  els.btnTrust.disabled = true;
-  els.btnSafe.disabled = true;
-  els.btnCancel.disabled = true;
-  
-  // 改變按鈕顯示
-  processingBtn.textContent = I18n.t("importing"); 
-  processingBtn.style.opacity = "0.7";
-
-  try {
-    // 2. 執行耗時的匯入作業 (讓 UI 有機會渲染，所以稍微讓出執行緒，雖非必須但在單執行緒環境是好習慣)
-    await new Promise(r => requestAnimationFrame(r));
-    
-    const count = await DataManager.importData(pendingImportData, isTrusted);
-
-    // 3. 匯入完成：關閉視窗並重置
-    els.modal.classList.remove("active");
-    
-    // 稍微延遲 alert 讓畫面先變回原狀，體驗較好
-    setTimeout(() => {
-        alert(I18n.t("import_success", { count })); 
-        loadData(); // 重新讀取列表
-    }, 50);
-
-  } catch (err) {
-    console.error(err);
-    alert(I18n.t("import_fail") + err.message); 
-  } finally {
-    // 4. 清理與復原狀態 (無論成功失敗都要做)
-    els.importFile.value = "";
-    pendingImportData = null;
-    
-    // 復原按鈕狀態 (下次打開才不會壞掉)
-    els.btnTrust.disabled = false;
-    els.btnSafe.disabled = false;
-    els.btnCancel.disabled = false;
-    processingBtn.innerHTML = originalText;
-    processingBtn.style.opacity = "1";
-    
-    // 確保視窗關閉
-    els.modal.classList.remove("active");
-  }
-}
-
 async function deleteItem(id) {
   await DataManager.deleteItems(id);
   loadData();
@@ -385,16 +286,6 @@ els.selectAll.onchange = (e) => {
 };
 els.batchDeleteBtn.onclick = batchDelete;
 els.batchExpireBtn.onclick = batchExpire;
-
-els.exportBtn.onclick = handleExport;
-els.importBtn.onclick = () => els.importFile.click();
-els.importFile.onchange = handleImportFile;
-els.btnTrust.onclick = () => finalizeImport(true);
-els.btnSafe.onclick = () => finalizeImport(false);
-els.btnCancel.onclick = () => {
-  els.modal.classList.remove("active");
-  els.importFile.value = "";
-};
 els.clearBtn.onclick = clearAllData;
 els.refreshBtn.onclick = loadData;
 
@@ -420,14 +311,13 @@ els.nextBtn.onclick = () => {
 // 自動重新整理（分頁隱藏時暫停，避免背景空轉）
 setInterval(() => {
   if (document.hidden) return;
-  const isModalOpen = els.modal.classList.contains("active");
   const hasChecks = document.querySelectorAll(".row-check:checked").length > 0;
-  if (!isModalOpen && !hasChecks) {
+  if (!hasChecks) {
     loadData();
   }
 }, 15000);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && !els.modal.classList.contains("active")) {
+  if (!document.hidden) {
     loadData();
   }
 });

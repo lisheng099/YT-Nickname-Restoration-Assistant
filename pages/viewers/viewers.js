@@ -483,41 +483,6 @@ $("newTagLabel").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("addTag").click();
 });
 
-$("exportBtn").addEventListener("click", async () => {
-  const data = await send({ type: "VN_EXPORT" });
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `viewer-notes-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  setStatus(I18n.t("vnm_exported", { count: data.viewers.length }));
-});
-
-let importMode = "merge";
-$("importMerge").addEventListener("click", () => {
-  importMode = "merge";
-  $("importFile").click();
-});
-$("importReplace").addEventListener("click", () => {
-  if (!confirm(I18n.t("vnm_confirm_replace"))) return;
-  importMode = "replace";
-  $("importFile").click();
-});
-$("importFile").addEventListener("change", async () => {
-  const file = $("importFile").files[0];
-  $("importFile").value = "";
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    const result = await send({ type: "VN_IMPORT", data, mode: importMode });
-    setStatus(I18n.t("vnm_imported", { count: result.imported, skipped: result.skipped }));
-  } catch (err) {
-    setStatus(I18n.t("vnm_import_failed"));
-  }
-});
-
 $("clearBtn").addEventListener("click", async () => {
   if (!confirm(I18n.t("vnm_confirm_clear"))) return;
   await send({ type: "VN_CLEAR" });

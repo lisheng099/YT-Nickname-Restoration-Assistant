@@ -159,22 +159,6 @@ const BgViewers = {
     return { viewers: this.index.list(), tags: this.index.tags, reactionDefs: this.index.reactionDefs };
   },
 
-  exportData: async function () {
-    await this.ready();
-    return this.index.exportData();
-  },
-
-  importData: async function (data, mode) {
-    await this.ready();
-    const result = this.index.importData(data, mode);
-    await idbKeyval.clear(this.store);
-    await idbKeyval.set(this.TAGS_KEY, this.index.tags, this.store);
-    await idbKeyval.set(this.REACTION_DEFS_KEY, this.index.reactionDefs, this.store);
-    await this.persist(this.index.list(), []);
-    this.bumpRev();
-    return result;
-  },
-
   clear: async function () {
     await this.ready();
     this.index.load([], [], this.index.reactionDefs);
@@ -207,10 +191,6 @@ const BgViewers = {
         return run(this.top(request.limit));
       case "VN_LIST":
         return run(this.list());
-      case "VN_EXPORT":
-        return run(this.exportData());
-      case "VN_IMPORT":
-        return run(this.importData(request.data, request.mode));
       case "VN_CLEAR":
         return run(this.clear());
       default:
