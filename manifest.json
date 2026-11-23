@@ -52,7 +52,8 @@
     },
     {
       "matches": [
-        "https://www.youtube.com/live_chat*"
+        "https://www.youtube.com/live_chat*",
+        "https://studio.youtube.com/live_chat*"
       ],
       "js": [
         "js/content/page_probe.js"

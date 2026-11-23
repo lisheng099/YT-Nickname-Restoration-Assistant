@@ -13,6 +13,7 @@
     "yt-live-chat-paid-message-renderer",
     "yt-live-chat-membership-item-renderer",
     "yt-live-chat-paid-sticker-renderer",
+    "ytd-sponsorships-live-chat-gift-purchase-announcement-renderer",
   ].join(",");
 
   const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
@@ -44,6 +45,11 @@
       }
       #author-photo[data-sm-editable="1"] {
         cursor: pointer;
+        border-radius: 50%;
+      }
+      #author-photo[data-sm-editable="1"]:hover {
+        outline: 2px solid #3ea6ff;
+        outline-offset: 1px;
       }
       #author-photo[data-sm-has-note="1"] {
         box-shadow: 0 0 0 2px #f59e0b;
@@ -288,8 +294,13 @@
     if (!isEnabled) return;
     ensureStyles();
     closePanel();
-    const id = extractIdentity(host);
-    const key = cacheKey(id);
+    let id = extractIdentity(host);
+    let key = cacheKey(id);
+    if (!key) {
+      document.dispatchEvent(new CustomEvent("sm-probe-cid"));
+      id = extractIdentity(host);
+      key = cacheKey(id);
+    }
     if (!key) return;
 
     const lookupRes = await send({
@@ -502,22 +513,37 @@
     const localNotesKey = (window.AppConfig && window.AppConfig.LOCAL_NOTES_KEY) || "yt_realname_local_notes";
     const notesRevKey = (window.AppConfig && window.AppConfig.NOTES_REV_KEY) || "sm_viewer_notes_rev";
 
-    document.addEventListener("click", (e) => {
-      if (activePanel && !activePanel.contains(e.target)) {
-        const isAvatar = e.target.closest && e.target.closest("#author-photo");
-        if (!isAvatar) closePanel();
-      }
-      if (!isEnabled) return;
-      const avatar = e.target.closest && e.target.closest("#author-photo");
-      if (avatar) {
-        const host = avatar.closest(HOST_SELECTOR);
-        if (host) {
-          e.preventDefault();
-          e.stopPropagation();
-          openPanel(host, avatar);
+    function findAvatarFromEvent(e) {
+      if (typeof e.composedPath === "function") {
+        for (const node of e.composedPath()) {
+          if (node && node.nodeType === 1 && node.id === "author-photo") {
+            return node;
+          }
         }
       }
-    });
+      if (e.target && e.target.closest) {
+        return e.target.closest("#author-photo");
+      }
+      return null;
+    }
+
+    function handleAvatarActivate(e) {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      const avatar = findAvatarFromEvent(e);
+      if (activePanel && !activePanel.contains(e.target) && !avatar) {
+        if (e.type === "click") closePanel();
+      }
+      if (!isEnabled || !avatar) return;
+      const host = avatar.closest && avatar.closest(HOST_SELECTOR);
+      if (!host) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+      openPanel(host, avatar);
+    }
+
+    document.addEventListener("click", handleAvatarActivate, true);
+    document.addEventListener("keydown", handleAvatarActivate, true);
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closePanel();

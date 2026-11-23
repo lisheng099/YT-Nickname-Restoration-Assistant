@@ -63,6 +63,10 @@
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["id"] });
   };
 
+  document.addEventListener("sm-probe-cid", () => {
+    if (document.body) scan(document.body);
+  });
+
   if (document.body) start();
   else document.addEventListener("DOMContentLoaded", start, { once: true });
 })();
