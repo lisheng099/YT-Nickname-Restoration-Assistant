@@ -59,3 +59,27 @@ test("過長暱稱與備註自動截斷，無效識別碼略過", () => {
   assert.equal(res.record.customNickname.length, ViewerNotesModel.MAX_NICK_LEN);
   assert.equal(res.record.notes[0].length, ViewerNotesModel.MAX_NOTE_LEN);
 });
+
+test("匯入備份：只合併不刪除，較新的本機暱稱不會被舊備份覆蓋", () => {
+  const M = ViewerNotesModel;
+  const local = { key: UC_A, channelId: UC_A, customNickname: "新暱稱", notes: ["本機備註"], updatedAt: 5000 };
+
+  // 舊備份：暱稱不覆蓋，備註合併
+  const older = M.mergeImportPatch(local, { channelId: UC_A, customNickname: "舊暱稱", notes: ["備份備註"], updatedAt: 1000 });
+  assert.equal("customNickname" in older.patch, false);
+  assert.deepEqual(older.patch.notes, ["本機備註", "備份備註"]);
+  assert.equal(older.updatedAt, 5000);
+
+  // 較新的備份：暱稱以備份為準
+  const newer = M.mergeImportPatch(local, { channelId: UC_A, customNickname: "更新", notes: [], updatedAt: 9000 });
+  assert.equal(newer.patch.customNickname, "更新");
+  assert.deepEqual(newer.patch.notes, ["本機備註"]);
+
+  // 空紀錄不會清掉本機資料
+  assert.equal(M.mergeImportPatch(local, { channelId: UC_A, customNickname: "", notes: [] }), null);
+
+  // 本機沒有的紀錄直接新增
+  const fresh = M.mergeImportPatch(null, { channelId: UC_B, customNickname: "B", updatedAt: 0 });
+  assert.equal(fresh.patch.customNickname, "B");
+  assert.ok(fresh.updatedAt > 0);
+});

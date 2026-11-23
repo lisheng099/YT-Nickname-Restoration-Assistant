@@ -627,6 +627,7 @@ function handleNotesImportFile(event) {
       const records = Array.isArray(json) ? json : Array.isArray(json.records) ? json.records : null;
       if (!records) throw new Error("invalid");
       const out = await sendMsg({ type: "NOTES_IMPORT", records });
+      if (!out || out.error) throw new Error("store");
       alert(I18n.t("notes_import_success", { count: (out && out.count) || 0 }));
       loadNotes();
     } catch {

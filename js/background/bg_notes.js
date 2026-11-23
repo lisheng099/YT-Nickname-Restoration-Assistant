@@ -50,6 +50,25 @@ const ViewerNotesModel = {
     return out;
   },
 
+  /**
+   * The patch that merges one backup record into what is stored, or null when it adds nothing.
+   * Importing never deletes: notes are unioned, and the nickname from the backup wins only when the
+   * local record has none or is not newer than the backup.
+   */
+  mergeImportPatch: function (existing, record) {
+    if (!record || typeof record !== "object") return null;
+    const nick = this.cleanNick(record.customNickname);
+    const notes = this.cleanNotes(record.notes);
+    if (!nick && notes.length === 0) return null;
+    const incomingAt = Number(record.updatedAt) || 0;
+    const localAt = existing ? Number(existing.updatedAt) || 0 : 0;
+    const patch = { notes: this.cleanNotes([...(existing ? existing.notes : []), ...notes]) };
+    if (nick && (!existing || !existing.customNickname || incomingAt >= localAt)) {
+      patch.customNickname = nick;
+    }
+    return { patch, updatedAt: Math.max(incomingAt, localAt) || Date.now() };
+  },
+
   createIndex: function () {
     const byKey = new Map();
     const handleToKey = new Map();
@@ -280,33 +299,46 @@ const BgNotes = {
     await this.ready();
     if (!Array.isArray(records)) return { count: 0 };
     let count = 0;
-    const toWrite = [];
-    const toRemove = [];
+    const toWrite = new Map();
+    const toRemove = new Set();
     for (const r of records) {
       if (!r || typeof r !== "object") continue;
       const cid = ViewerNotesModel.normalizeChannelId(r.channelId || r.key);
       const handle = ViewerNotesModel.normalizeHandle(r.handle || (!cid ? r.key : null));
       if (!cid && !handle) continue;
-      const patch = {};
-      if (typeof r.customNickname === "string") patch.customNickname = r.customNickname;
-      if (Array.isArray(r.notes)) patch.notes = r.notes;
-      const res = this.index.patch({ channelId: cid, handle }, patch, Number(r.updatedAt) || Date.now());
-      if (res.removedKeys.length) toRemove.push(...res.removedKeys);
+      const merged = ViewerNotesModel.mergeImportPatch(this.index.find({ channelId: cid, handle }), r);
+      if (!merged) continue;
+      const res = this.index.patch({ channelId: cid, handle }, merged.patch, merged.updatedAt);
+      for (const k of res.removedKeys) {
+        toRemove.add(k);
+        toWrite.delete(k);
+      }
       if (res.saved) {
-        toWrite.push([res.saved.key, res.saved]);
+        toWrite.set(res.saved.key, res.saved);
+        toRemove.delete(res.saved.key);
         count++;
       }
     }
     try {
       if (this.store) {
-        if (toRemove.length) await idbKeyval.delMany(toRemove, this.store);
-        if (toWrite.length) {
-          if (idbKeyval.setMany) await idbKeyval.setMany(toWrite, this.store);
-          else await Promise.all(toWrite.map(([k, v]) => idbKeyval.set(k, v, this.store)));
+        if (toRemove.size) await idbKeyval.delMany([...toRemove], this.store);
+        if (toWrite.size) {
+          const entries = [...toWrite.entries()];
+          if (idbKeyval.setMany) await idbKeyval.setMany(entries, this.store);
+          else await Promise.all(entries.map(([k, v]) => idbKeyval.set(k, v, this.store)));
         }
       }
     } catch (e) {
       if (typeof Logger !== "undefined") Logger.red("[BgNotes] 匯入失敗:", e);
+      // keep the in-memory index in step with what is actually stored
+      try {
+        const entries = await idbKeyval.entries(this.store);
+        this.index.load(entries.map(([, val]) => val));
+      } catch {
+        // ignore: the next service worker start reloads from storage
+      }
+      this.bumpRev();
+      return { count: 0, error: true };
     }
     this.bumpRev();
     return { count };
