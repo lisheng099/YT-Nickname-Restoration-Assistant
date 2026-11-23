@@ -97,21 +97,3 @@ test("parseSubsString 支援各語系單位", () => {
     assert.equal(YTParser.parseSubsString(input), expected, input);
   }
 });
-
-test("頻道 ID：從 channelMetadataRenderer、canonical 連結取得，格式不符時為 null", () => {
-  const id = "UC" + "x".repeat(22);
-  const data = header("Ming", [row("@ming", "2.3K subscribers")]);
-  assert.equal(YTParser.parse(page(data)).channelId, undefined);
-  assert.equal(
-    YTParser.parse(page({ ...data, metadata: { channelMetadataRenderer: { externalId: id } } })).channelId,
-    id
-  );
-  assert.equal(
-    YTParser.parse(page(data, `<link rel="canonical" href="https://www.youtube.com/channel/${id}">`)).channelId,
-    id
-  );
-  assert.equal(
-    YTParser.parse(page({ ...data, metadata: { channelMetadataRenderer: { externalId: "UCshort" } } })).channelId,
-    undefined
-  );
-});

@@ -85,7 +85,7 @@ const TooltipManager = {
   },
 
   // =======================================================
-  // [模式 1-B] renderDual (雙節點替換，選用)
+  // [模式 1-B] renderDual (雙節點替換)
   // 用途：不動 YouTube 原本的文字節點，只將它隱藏，並在前方插入獨立的暱稱節點。
   // 好處：YouTube 重複使用元素或改寫文字時，原節點仍是它自己管理的內容，
   //       不會被我們清空；換人時只需更新獨立節點，不會殘留上一位的內容。
@@ -373,6 +373,97 @@ const TooltipManager = {
     target.dataset.rnReplaced = "yes";
   },
 
+  // =======================================================
+  // 標籤 (主播公開的自訂標籤與記憶標籤)
+  // 用途：在作者名稱後方插入一排小標籤；同一個元素換人時先清掉舊的。
+  // =======================================================
+  TAG_CLASS: "sm-viewer-tags",
+
+  clearTags: function (target) {
+    const next = target && target.nextElementSibling;
+    if (next && next.classList && next.classList.contains(this.TAG_CLASS)) {
+      next.remove();
+    }
+    if (target) delete target.dataset.smTagHandle;
+  },
+
+  NICK_CLASS: "sm-viewer-nick",
+
+  // customNickname：主播公開的自訂暱稱。主名稱維持官方頻道名稱，暱稱以括號附在名稱後方。
+  renderTags: function (target, handle, chips, customNickname) {
+    if (!target || !target.isConnected) return;
+    this.clearTags(target);
+    target.dataset.smTagHandle = handle;
+    if (!Array.isArray(chips)) chips = [];
+    if (chips.length === 0 && !customNickname) return;
+
+    const box = document.createElement("span");
+    box.className = this.TAG_CLASS;
+    Object.assign(box.style, {
+      display: "inline-flex",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: "3px",
+      marginLeft: "4px",
+      marginRight: "4px",
+      verticalAlign: "middle",
+    });
+
+    if (customNickname) {
+      const nick = document.createElement("span");
+      nick.className = this.NICK_CLASS;
+      nick.textContent = "[" + customNickname + "]";
+      nick.title = I18n.t("streamer_nickname");
+      Object.assign(nick.style, {
+        fontSize: "12px",
+        lineHeight: "16px",
+        opacity: "0.85",
+        whiteSpace: "nowrap",
+        maxWidth: "160px",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      });
+      box.appendChild(nick);
+    }
+
+    chips.slice(0, 8).forEach((chip) => {
+      const el = document.createElement("span");
+      el.textContent = chip.label;
+      Object.assign(el.style, {
+        display: "inline-block",
+        padding: "0 5px",
+        borderRadius: "8px",
+        fontSize: "11px",
+        lineHeight: "16px",
+        fontWeight: "500",
+        whiteSpace: "nowrap",
+        maxWidth: "140px",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      });
+      if (chip.color) {
+        el.style.background = chip.color;
+        el.style.color = this.contrastText(chip.color);
+      } else {
+        el.style.background = "rgba(128, 128, 128, 0.25)";
+        el.style.color = "inherit";
+      }
+      box.appendChild(el);
+    });
+
+    target.insertAdjacentElement("afterend", box);
+  },
+
+  // 依背景色亮度選擇黑字或白字
+  contrastText: function (hex) {
+    let h = hex.replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 >= 150 ? "#111111" : "#ffffff";
+  },
+
   // === 通用樣式處理 ===
   applyTextStyle: function (element, wrapper, isExpired) {
     const target = wrapper || element;
@@ -509,74 +600,68 @@ const TooltipManager = {
 
   show: function (e, target) {
     if (!this.tooltipEl) this.createTooltipElement();
+    this.updateTheme();
 
     const name = target.dataset.rnName || I18n.t("loading");
     const handle = target.dataset.rnHandle || "";
     const subs = parseInt(target.dataset.rnSubs || "0");
     const isExpired = target.dataset.rnExpired === "true";
-    const renderKey = `${name}|${handle}|${subs}|${isExpired}`;
 
-    if (this._lastTarget !== target || this._lastKey !== renderKey) {
-      this._lastTarget = target;
-      this._lastKey = renderKey;
-      this.updateTheme();
-      this.tooltipEl.replaceChildren();
+    this.tooltipEl.replaceChildren();
 
-      const nameDiv = document.createElement("div");
-      Object.assign(nameDiv.style, {
-        fontWeight: "600",
-        fontSize: "1.1em",
-        marginBottom: "2px",
+    const nameDiv = document.createElement("div");
+    Object.assign(nameDiv.style, {
+      fontWeight: "600",
+      fontSize: "1.1em",
+      marginBottom: "2px",
+    });
+    nameDiv.textContent = name;
+    this.tooltipEl.appendChild(nameDiv);
+
+    if (handle) {
+      const handleDiv = document.createElement("div");
+      Object.assign(handleDiv.style, {
+        color: "inherit",
+        opacity: "0.7",
+        fontSize: "0.9em",
+        fontFamily: "monospace",
       });
-      nameDiv.textContent = name;
-      this.tooltipEl.appendChild(nameDiv);
-
-      if (handle) {
-        const handleDiv = document.createElement("div");
-        Object.assign(handleDiv.style, {
-          color: "inherit",
-          opacity: "0.7",
-          fontSize: "0.9em",
-          fontFamily: "monospace",
-        });
-        handleDiv.textContent = handle;
-        this.tooltipEl.appendChild(handleDiv);
-      }
-
-      if (subs > 0) {
-        const subsDiv = document.createElement("div");
-        Object.assign(subsDiv.style, {
-          marginTop: "6px",
-          fontSize: "0.85em",
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-        });
-        const iconSpan = document.createElement("span");
-        iconSpan.textContent = "👥";
-        const textSpan = document.createElement("span");
-        textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
-        subsDiv.appendChild(iconSpan);
-        subsDiv.appendChild(textSpan);
-        this.tooltipEl.appendChild(subsDiv);
-      }
-
-      if (isExpired) {
-        const expDiv = document.createElement("div");
-        Object.assign(expDiv.style, {
-          marginTop: "6px",
-          paddingTop: "4px",
-          borderTop: "1px dashed rgba(128,128,128,0.3)",
-          color: "#ffab91",
-          fontSize: "0.85em",
-        });
-        expDiv.textContent = I18n.t("data_expired");
-        this.tooltipEl.appendChild(expDiv);
-      }
-      this._lastRect = this.tooltipEl.getBoundingClientRect();
+      handleDiv.textContent = handle;
+      this.tooltipEl.appendChild(handleDiv);
     }
 
-    const rect = this._lastRect || this.tooltipEl.getBoundingClientRect();
+    if (subs > 0) {
+      const subsDiv = document.createElement("div");
+      Object.assign(subsDiv.style, {
+        marginTop: "6px",
+        fontSize: "0.85em",
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+      });
+      const iconSpan = document.createElement("span");
+      iconSpan.textContent = "👥";
+      const textSpan = document.createElement("span");
+      textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
+      subsDiv.appendChild(iconSpan);
+      subsDiv.appendChild(textSpan);
+      this.tooltipEl.appendChild(subsDiv);
+    }
+
+    if (isExpired) {
+      const expDiv = document.createElement("div");
+      Object.assign(expDiv.style, {
+        marginTop: "6px",
+        paddingTop: "4px",
+        borderTop: "1px dashed rgba(128,128,128,0.3)",
+        color: "#ffab91",
+        fontSize: "0.85em",
+      });
+      expDiv.textContent = I18n.t("data_expired");
+      this.tooltipEl.appendChild(expDiv);
+    }
+
+    const rect = this.tooltipEl.getBoundingClientRect();
     const x = Math.min(e.clientX + 15, window.innerWidth - rect.width - 15);
     const y = Math.min(e.clientY + 15, window.innerHeight - rect.height - 15);
     this.tooltipEl.style.left = `${x}px`;

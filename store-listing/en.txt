@@ -1,0 +1,68 @@
+This extension is inspired by 'YTid 名稱修復器'. Special thanks to 夜有風 for sharing!
+
+📺 YT Nickname Restorer
+
+📖 Introduction
+YT Nickname Restorer is a browser extension designed specifically for YouTube viewers. To solve the issue of YouTube replacing user names with unrecognizable Handles (e.g., @User-xk9lp...), this tool automatically restores these codes to the channel's real display name in Live Chats and Comments—and lets you save your own private custom nicknames and notes for regulars.
+
+We adhere strictly to a "100% Local, Privacy First" policy. All lookups are sent directly from your browser to YouTube, and nothing is ever uploaded to any third-party server.
+
+🚀 Key Features
+
+1. Automatic Nickname Restoration
+- Support Range: Live Chat, Comments, and YouTube Studio.
+- How it works: When you watch a video or live stream, the extension automatically detects @Handle IDs on the screen and silently looks up their real channel names in the background.
+- Native Style Preservation: Keeps YouTube's original name colors, member badges, and channel owner styles intact without flickering.
+- Smart Cache Lifecycle: Names are cached locally for 15 days by default before refreshing automatically in the background, and unused entries are cleaned up after 30 days to save space.
+
+2. Local Custom Nicknames & Notes (New in v1.3.0)
+- Click any chatter's avatar in Live Chat to open your private notes panel (can be toggled on/off in settings; enabled by default).
+- Custom Nickname: Give regulars a memorable alias that directly replaces their displayed name in chat (preserving member colors; hover to see the original channel name).
+- Personal Notes: Add or remove multiple text notes for each viewer. Avatars with notes show a subtle ring—hover over the avatar to preview anytime.
+- Dedicated Management Tab: Switch to the "Nicknames & Notes" tab in Cache Manager to search, edit, delete, export, or import all local records in one place.
+- Completely Private: Stored separately in your browser, never uploaded, and kept safe even if you clear the channel name cache.
+
+3. Smart Tooltip
+Hover your mouse over a restored name to see a floating info card:
+- Real Name: Displays the full channel name.
+- Original Handle: For easy verification of the original @ID.
+- Subscriber Badge: Displays a colored dot based on subscriber count:
+  🟢 Cyan: 1 Million+ (1M+)
+  🟡 Gold: 100k+
+  ⚪ Silver: 10k+
+  🟠 Bronze: 1,000+ (1k+)
+  🟤 Brown: Rising Channel (500+)
+- Expired Notice: Lets you know when an entry is queued for a silent background refresh.
+
+4. Flexible Settings (Click Extension Icon)
+- Language Switcher: Supports English, Traditional Chinese, Simplified Chinese, and Japanese.
+- Theme Switcher: Choose between Follow System, Light, and Dark mode—synced across all extension windows and panels.
+- Max Name Length: Set the display character limit (default: 20 chars) to keep chat tidy.
+- Click to Copy URL: When enabled, clicking a restored name copies the channel URL directly.
+- Nicknames & Notes Toggle: Turn avatar editing and custom nickname display on or off anytime.
+- Fetch Speed Control: Choose between "Normal" and "Slow (Safe Mode)" to match your viewing habits.
+- Customizable cache expiration and auto-cleanup days.
+
+💾 Import & Export: The Ultimate Community Tool
+Located in the "Cache Manager", sharing a backup file (.json) lets fan communities build a shared regulars list together.
+
+How to use:
+1. Click the extension icon in the top right corner of your browser.
+2. Click "📋 Open Cache Manager".
+3. Use Export to save your collected channel names as a JSON file, or Import to merge a file shared by others into your local list.
+
+🤝 Why use Import?
+- Crowd-sourced "Regulars List": Veteran fans can share their accumulated list in Discord or fan groups so newcomers recognize regulars right away.
+- Instant Display, No Waiting: Names already in your list appear immediately even in busy live chats.
+- Smart Verification: Imported entries can be marked for background verification so you get instant display while keeping names accurate.
+
+🛠️ FAQ & Troubleshooting
+
+Q1: Why do some names have a dotted underline?
+A: This means the entry was imported or hasn't been refreshed for over 15 days. It still displays normally and will update silently the next time that viewer speaks.
+
+Q2: What if names stop restoring temporarily?
+A: Fetching too many new names in a short time may trigger a temporary pause from YouTube. Wait about 5 minutes to recover, or switch to "Slow Mode" in settings if you keep live streams open for long periods.
+
+Q3: Will my nicknames, notes, or browsing data be uploaded?
+A: Never. This extension operates 100% locally in your browser with no server uploads. Exported JSON files are saved only to your own computer.

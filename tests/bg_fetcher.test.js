@@ -264,3 +264,49 @@ test("串流讀取：多位元組字元被切在區塊邊界時不會亂碼", as
   assert.equal(result.nameRaw, "中文頻道名稱");
   assert.equal(result.subs, 2000);
 });
+
+test("抓取頻道頁使用 credentials: omit 且正常模式可併發 3 條、遇錯立即降回單線程", async () => {
+  const inits = [];
+  let active = 0;
+  let maxActive = 0;
+  reset(() => okPage("X"));
+  global.fetch = async (url, init) => {
+    fetchCalls.push(url);
+    inits.push(init);
+    active++;
+    if (active > maxActive) maxActive = active;
+    await new Promise((r) => setTimeout(r, 15));
+    active--;
+    return okPage("User");
+  };
+
+  await Promise.all(["@u1", "@u2", "@u3", "@u4"].map((h) => BgFetcher.fetch(h)));
+  assert.equal(inits[0].credentials, "omit");
+  assert.equal(maxActive, 3);
+
+  BgFetcher.consecutiveErrors = 1;
+  assert.equal(BgFetcher.effectiveConcurrency(), 1);
+  BgFetcher.consecutiveErrors = 0;
+  BgFetcher.speedMode = "SLOW";
+  assert.equal(BgFetcher.effectiveConcurrency(), 1);
+  BgFetcher.speedMode = "NORMAL";
+});
+
+test("串流讀取：跳脫引號切在區塊邊界時仍能精準擷取 ytInitialData 與訂閱數並提早中斷", async () => {
+  const data = channelData('稱呼 "測試"', "3.2萬位訂閱者");
+  const escIdx = data.indexOf('\\"');
+  assert.ok(escIdx > 0);
+  const chunks = [
+    "<html><body><script>var ytInitialData = " + data.slice(0, escIdx + 1),
+    data.slice(escIdx + 1) + ";</script>",
+    "<div>ignored</div>".repeat(500),
+  ];
+  const { response, state } = streamPage(chunks);
+  reset(() => response);
+  const result = await BgFetcher.fetch("@esc");
+  assert.equal(result.success, true);
+  assert.equal(result.nameRaw, '稱呼 "測試"');
+  assert.equal(result.subs, 32000);
+  assert.equal(state.cancelled, true);
+});
+

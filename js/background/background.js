@@ -1,97 +1,112 @@
 // ===========================================================
 // background.js - 核心服務
+// 查詢順序：本機快取 -> 本機向 YouTube 查詢
 // ===========================================================
 
-// 1. 引入依賴 (注意順序)
-// 路徑一律寫成 ../<資料夾>/<檔案>：importScripts 以 Service Worker 進入點的位置為基準，
-// 這樣寫可讓放在 js/ 下其他資料夾的進入點 (附加模組) 也能載入本檔。
 try {
   importScripts(
-    "../shared/config.js", // 1. 基礎設定 (AppConfig) 必須最先載入
-    "../shared/utils.js", // 2. 工具函式 (Logger) 依賴 Config
-    "../libs/idb-keyval.js", // 3. 第三方 IndexedDB 庫
-    "../shared/viewer_model.js", // 觀眾筆記資料模型
-    "../background/bg_viewers.js", // 觀眾筆記儲存 (依賴 Utils, IDB, ViewerModel)
-    "../background/yt_parser.js", // 4. 解析器
-    "../background/bg_cache.js", // 5. 快取管理器 (依賴 Config, Utils, IDB)
-    "../background/bg_fetcher.js" // 6. 爬蟲管理器 (依賴 Config, Utils, Cache, Parser)
+    "../shared/config.js",
+    "../shared/utils.js",
+    "../libs/idb-keyval.js",
+    "yt_parser.js",
+    "bg_cache.js",
+    "bg_fetcher.js",
+    "bg_notes.js"
   );
 } catch (e) {
   console.error("[Background] Script Import Error:", e);
 }
 
-// === 版本更新時自動重置保險絲 ===
-// 當擴充功能更新 (Update) 時，假設問題已修復，自動將保險絲重置為 NORMAL
+// 版本更新時重置保險絲
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "update") {
     const { FUSE_FE_KEY, FUSE_BE_KEY } = AppConfig;
     const resetState = { status: "NORMAL", reason: null, timestamp: Date.now() };
-
-    chrome.storage.local.set(
-      {
-        [FUSE_FE_KEY]: resetState,
-        [FUSE_BE_KEY]: resetState,
-      },
-      () => {
-        console.log(
-          `[Background] Extension updated to v${chrome.runtime.getManifest().version}. Fuses have been reset.`
-        );
-      }
-    );
+    chrome.storage.local.set({ [FUSE_FE_KEY]: resetState, [FUSE_BE_KEY]: resetState });
   }
 });
 
-// 2. 監聽訊息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // === 觀眾筆記 (標籤、備註、評分、自訂暱稱) ===
-  if (request && typeof request.type === "string" && request.type.startsWith("VN_")) {
-    return BgViewers.handleMessage(request, sendResponse);
-  }
-
-  // === 快取查詢 (Async) ===
   if (request.type === "CACHE_GET") {
     handleCacheGet(request.handle, sendResponse);
-    return true; // 保持通道開啟
+    return true;
   }
 
-  // === 寫入快取 (手動) ===
-  if (request.type === "CACHE_SET") {
-    BgCache.set(request.handle, request.data);
-    sendResponse({ success: true });
-    return false;
+  if (request.type === "CACHE_CLEAR") {
+    BgCache.clear().then(() => sendResponse({ success: true }));
+    return true;
   }
 
-  // === 強制讓 Memory Cache 失效 (同步 Manager 操作) ===
+  if (request.type === "GET_CACHE_COUNT") {
+    BgCache.getCount().then((count) => sendResponse({ count }));
+    return true;
+  }
+
   if (request.type === "CACHE_INVALIDATE") {
     BgCache.invalidateMemory(request.handles);
     sendResponse({ success: true });
     return false;
   }
 
-  // === 清空 Memory Cache ===
   if (request.type === "CACHE_CLEAR_MEM") {
-    BgCache.clear(); // 這裡我們直接呼叫 clear，因為 clear 也包含了清空 memory
+    BgCache.memoryCache.clear();
+    BgCache.pendingWrites.clear();
+    if (BgCache.saveTimer) {
+      clearTimeout(BgCache.saveTimer);
+      BgCache.saveTimer = null;
+    }
     sendResponse({ success: true });
     return false;
   }
 
-  // === Popup 請求總數 ===
-  if (request.type === "GET_CACHE_COUNT") {
-    BgCache.getCount().then((count) => {
-      sendResponse({ count: count });
-    });
-    return true; // 保持通道開啟以進行非同步回應
+  if (request.type === "NOTES_LOOKUP") {
+    BgNotes.lookup(request.ids).then((res) => sendResponse(res));
+    return true;
   }
 
-  // === 抓取請求 ===
+  if (request.type === "NOTES_SAVE") {
+    BgNotes.save(request.identity, request.patch).then((res) => sendResponse(res));
+    return true;
+  }
+
+  if (request.type === "NOTES_COUNT") {
+    BgNotes.getCount().then((count) => sendResponse({ count }));
+    return true;
+  }
+
+  if (request.type === "NOTES_CLEAR") {
+    BgNotes.clear().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
+  if (request.type === "NOTES_LIST") {
+    BgNotes.getAll().then((records) => sendResponse({ records }));
+    return true;
+  }
+
+  if (request.type === "NOTES_DELETE") {
+    BgNotes.remove(request.key).then((res) => sendResponse(res));
+    return true;
+  }
+
+  if (request.type === "NOTES_IMPORT") {
+    BgNotes.importRecords(request.records).then((res) => sendResponse(res));
+    return true;
+  }
+
+  if (request.type === "RESOLVE_CHANNEL_INFO") {
+    const tabId = sender.tab ? sender.tab.id : null;
+    handleResolveChannelInfo(request.handle, request.ttlMs, tabId).then((result) =>
+      sendResponse(result)
+    );
+    return true;
+  }
+
   if (request.type === "FETCH_CHANNEL_INFO") {
     const tabId = sender.tab ? sender.tab.id : null;
-    resolveChannelInfo(
-      request.handle,
-      request.priority,
-      request.refresh,
-      tabId
-    ).then((result) => sendResponse(result));
+    resolveChannelInfo(request.handle, request.priority, request.refresh, tabId).then(
+      (result) => sendResponse(result)
+    );
     return true;
   }
 
@@ -100,80 +115,78 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// === 監聽分頁關閉事件 (防止 Memory Leak) ===
 chrome.tabs.onRemoved.addListener((tabId) => {
   BgFetcher.cleanupTab(tabId);
 });
 
-// 附加模組可登記自己的查詢來源 (本體沒有登記任何來源)。
-// 來源回傳 { nameRaw, subs, channelId } 表示查到；{ stop: true } 表示不必再由本機抓取；null 表示交給下一個。
-const RnAddons = { resolvers: [] };
-
+// 本機快取未命中時，直接由本機向 YouTube 查詢 (結果只寫入本機快取)
 async function resolveChannelInfo(handle, priority, refresh, tabId) {
-  for (const resolver of RnAddons.resolvers) {
-    try {
-      const hit = await resolver(handle);
-      if (hit && hit.nameRaw) {
-        BgCache.set(handle, { name: hit.nameRaw, subs: hit.subs || 0, cid: hit.channelId });
-        return { success: true, nameRaw: hit.nameRaw, subs: hit.subs || 0, channelId: hit.channelId || null };
-      }
-      if (hit && hit.stop) return { error: "Not resolved" };
-    } catch (e) {
-      // 這個來源失敗時交給下一個
-    }
-  }
   return BgFetcher.fetch(handle, priority, refresh, tabId);
 }
 
-// 3. 核心查詢順序控制
-async function handleCacheGet(handle, sendResponse) {
-  if (!handle) {
-    sendResponse(null);
-    return;
-  }
+async function lookupCache(handle) {
+  if (!handle) return null;
 
-  // (1) 記憶體與寫入緩衝區 (Memory Cache / Pending Writes)
-  const normKey = BgCache.normalizeKey(handle);
+  const normKey =
+    typeof BgCache.normalizeKey === "function"
+      ? BgCache.normalizeKey(handle)
+      : String(handle).trim().toLowerCase();
   if (BgCache.memoryCache.has(normKey)) {
     const data = BgCache.memoryCache.get(normKey);
     BgCache.memoryCache.delete(normKey);
     BgCache.memoryCache.set(normKey, data);
-    sendResponse(data);
-    return;
+    return data;
   }
-  if (BgCache.pendingWrites.has(normKey)) {
-    sendResponse(BgCache.pendingWrites.get(normKey));
-    return;
+  if (BgCache.pendingWrites && BgCache.pendingWrites.has(normKey)) {
+    return BgCache.pendingWrites.get(normKey);
   }
 
-  // (2) 爬蟲佇列 (Request Coalescing)
   const runningTask = BgFetcher.getRunningTask(handle);
   if (runningTask) {
     const result = await runningTask;
     if (result && result.success) {
-      sendResponse({
-        name: result.nameRaw,
-        subs: result.subs,
-        cid: result.channelId || undefined,
-        ts: Date.now(), // 剛抓到的資料；前台以 ts 判斷是否過期
-      });
-    } else {
-      sendResponse(null);
+      return { name: result.nameRaw, subs: result.subs, ts: Date.now() };
     }
-    return;
+    return null;
   }
 
-  // (3) 硬碟 (IndexedDB via Cache Manager)
-  const diskData = await BgCache.get(handle);
-  if (diskData) {
-    sendResponse(diskData);
-    return;
-  }
-
-  // (4) 無資料 -> 回傳 null 引發後台抓取
-  sendResponse(null);
+  return (await BgCache.get(handle)) || null;
 }
 
-// 4. 初始化
+async function handleCacheGet(handle, sendResponse) {
+  sendResponse(await lookupCache(handle));
+}
+
+async function handleResolveChannelInfo(handle, ttlMs, tabId) {
+  if (!handle) return { success: false };
+  const cached = await lookupCache(handle);
+  if (cached && cached.name) {
+    const ts = cached.ts || 0;
+    const isExpired = typeof ttlMs === "number" && ttlMs > 0 ? Date.now() - ts > ttlMs : false;
+    return {
+      success: true,
+      fromCache: true,
+      name: cached.name,
+      subs: cached.subs || 0,
+      ts,
+      isExpired,
+    };
+  }
+  if (BgFetcher.fuseBackend.status === "TRIPPED") {
+    return { success: false, error: "Fuse Tripped" };
+  }
+  const fetched = await resolveChannelInfo(handle, "high", false, tabId);
+  if (fetched && fetched.success) {
+    return {
+      success: true,
+      fromCache: false,
+      nameRaw: fetched.nameRaw,
+      subs: fetched.subs || 0,
+      ts: Date.now(),
+      isExpired: false,
+    };
+  }
+  return { success: false, error: (fetched && fetched.error) || "Not resolved" };
+}
+
 BgCache.init();
-BgViewers.ready();

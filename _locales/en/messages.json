@@ -1,10 +1,10 @@
 {
   "appName": {
-    "message": "YT Nickname Restorer",
-    "description": "Extension Name"
+    "description": "Extension Name",
+    "message": "YT Nickname Restorer"
   },
   "appDesc": {
-    "message": "Automatically replaces YouTube Handle IDs (@User...) with real channel nicknames in live chats and comments. Privacy-first & Local.",
-    "description": "Extension Description"
+    "description": "Extension Description",
+    "message": "Restore YouTube @Handles to real channel names in live chat & comments, with local custom nicknames and notes. 100% local."
   }
 }

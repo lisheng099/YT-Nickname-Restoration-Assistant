@@ -1,10 +1,10 @@
 {
   "appName": {
-    "message": "YT ニックネーム復元アシスタント",
-    "description": "Extension Name"
+    "description": "Extension Name",
+    "message": "YT ニックネーム復元アシスタント"
   },
   "appDesc": {
-    "message": "YouTubeのチャットやコメント欄のユーザーID（@ID）を、自動的にニックネーム（チャンネル表示名）に置き換えます。ローカルバックグラウンドクローラー技術を採用し、データを第三者サーバーに送信しません。",
-    "description": "Extension Description"
+    "description": "Extension Description",
+    "message": "YouTubeのライブチャットやコメント欄の@ハンドルを本来のチャンネル名に復元。ローカル専用のカスタムあだ名・メモ機能付きで完全ローカル動作。"
   }
 }

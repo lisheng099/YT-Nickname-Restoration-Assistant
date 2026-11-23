@@ -100,6 +100,17 @@
         margin-top: 10px;
         line-height: 1.5;
       }
+      html[data-theme="dark"] body { background: #0f172a; color: #e2e8f0; }
+      html[data-theme="dark"] .container { background: #1e293b; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
+      html[data-theme="dark"] h1 { color: #f87171; border-bottom-color: #334155; }
+      html[data-theme="dark"] input[type="text"] { background: #0f172a; color: #f1f5f9; border-color: #475569; }
+      html[data-theme="dark"] .result-box { background: #0f172a; border-color: #334155; }
+      html[data-theme="dark"] .row { border-bottom-color: #334155; }
+      html[data-theme="dark"] .label { color: #94a3b8; }
+      html[data-theme="dark"] .value { color: #f1f5f9; }
+      html[data-theme="dark"] .note { color: #94a3b8; }
+      html[data-theme="dark"] .status-ok { color: #4ade80; }
+      html[data-theme="dark"] .status-err { color: #f87171; }
     </style>
   </head>
   <body>
@@ -152,6 +163,7 @@
     <script src="../../js/shared/utils.js"></script>
     <script src="../../js/shared/locales.js"></script>
     <script src="../../js/shared/i18n.js"></script>
+    <script src="../../js/shared/theme.js"></script>
     <script src="scraper_test.js"></script>
   </body>
 </html>

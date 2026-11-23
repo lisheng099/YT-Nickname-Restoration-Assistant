@@ -3,23 +3,23 @@
   "name": "__MSG_appName__",
   "description": "__MSG_appDesc__",
   "default_locale": "en",
-  "version": "2.0.1",
+  "version": "1.3.0",
   "minimum_chrome_version": "111",
-  "action": {
-    "default_title": "__MSG_appName__",
-    "default_popup": "pages/popup/popup.html",
-    "default_icon": {
-      "16": "icons/logo.png",
-      "48": "icons/logo.png",
-      "128": "icons/logo.png"
-    }
-  },
   "icons": {
     "16": "icons/logo.png",
     "48": "icons/logo.png",
     "128": "icons/logo.png"
   },
-  "options_page": "pages/viewers/viewers.html",
+  "action": {
+    "default_icon": {
+      "16": "icons/logo.png",
+      "48": "icons/logo.png",
+      "128": "icons/logo.png"
+    },
+    "default_title": "__MSG_appName__",
+    "default_popup": "pages/popup/popup.html"
+  },
+  "options_page": "pages/manager/manager.html",
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://studio.youtube.com/*"
@@ -41,11 +41,11 @@
         "js/shared/utils.js",
         "js/shared/locales.js",
         "js/shared/i18n.js",
-        "js/shared/viewer_model.js",
+        "js/shared/theme.js",
         "js/content/ui.js",
         "js/content/data_bridge.js",
         "js/content/scanner.js",
-        "js/content/viewer_notes.js"
+        "js/content/local_notes.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

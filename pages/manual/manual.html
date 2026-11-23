@@ -54,8 +54,6 @@
         font-family: monospace;
         color: #d63384;
       }
-
-      /* 標籤樣式 */
       .tag {
         background: #e8f5e9;
         color: #2e7d32;
@@ -64,12 +62,6 @@
         font-size: 0.6em;
         vertical-align: middle;
         margin-left: 8px;
-      }
-      .note {
-        background-color: #fff3e0;
-        border-left: 5px solid #ff9800;
-        padding: 10px;
-        margin: 15px 0;
       }
       .tech-box {
         background: #fff3cd;
@@ -80,8 +72,6 @@
         margin-top: 20px;
         font-size: 0.95em;
       }
-
-      /* 社群應用區塊 */
       .streamer-box {
         background: #f3e5f5;
         border: 1px solid #e1bee7;
@@ -138,16 +128,6 @@
         margin-left: 20px;
         color: #444;
       }
-      .footer {
-        margin-top: 40px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-        text-align: center;
-        color: #888;
-        font-size: 0.9em;
-      }
-
-      /* 保險絲區塊樣式 */
       .fuse-card {
         background-color: #f1f8e9;
         border: 1px solid #c5e1a5;
@@ -181,7 +161,6 @@
         font-size: 0.95em;
         color: #555;
       }
-      /* 警告樣式 */
       .fuse-warning {
         background-color: #ffebee;
         border-color: #ef9a9a;
@@ -189,7 +168,6 @@
       .fuse-warning .fuse-content h4 {
         color: #c62828;
       }
-
       @media (max-width: 600px) {
         .container {
           margin: 0;
@@ -197,39 +175,56 @@
           border-radius: 0;
         }
       }
+      html[data-theme="dark"] body { background-color: #0f172a; color: #e2e8f0; }
+      html[data-theme="dark"] .container { background: #1e293b; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); }
+      html[data-theme="dark"] h1 { color: #60a5fa; border-bottom-color: #334155; }
+      html[data-theme="dark"] h2 { color: #4ade80; border-left-color: #4ade80; }
+      html[data-theme="dark"] h3 { color: #cbd5e1; }
+      html[data-theme="dark"] code { background: #0f172a; color: #f472b6; }
+      html[data-theme="dark"] .tag { background: #14532d; color: #86efac; }
+      html[data-theme="dark"] .intro-card { background: #292524; border-color: #78350f; color: #fde68a; }
+      html[data-theme="dark"] .tech-box { background: #422006; border-color: #854d0e; color: #fde047; }
+      html[data-theme="dark"] .streamer-box { background: #2e1065; border-color: #6b21a8; color: #e9d5ff; }
+      html[data-theme="dark"] .streamer-title { color: #d8b4fe; }
+      html[data-theme="dark"] .highlight-box { background: #172554; border-color: #1d4ed8; color: #dbeafe; }
+      html[data-theme="dark"] .highlight-title { color: #93c5fd; }
+      html[data-theme="dark"] .fuse-card { background-color: #14532d; border-color: #22c55e; }
+      html[data-theme="dark"] .fuse-icon { background: #0f172a; }
+      html[data-theme="dark"] .fuse-content h4 { color: #86efac; }
+      html[data-theme="dark"] .fuse-content p { color: #cbd5e1; }
+      html[data-theme="dark"] .fuse-warning { background-color: #450a0a; border-color: #ef4444; }
+      html[data-theme="dark"] .fuse-warning .fuse-content h4 { color: #fca5a5; }
+      html[data-theme="dark"] .q { color: #fb923c; }
+      html[data-theme="dark"] .a { color: #cbd5e1; }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1><span data-i18n="app_title">📺 YT 暱稱還原助手</span> <span class="tag" id="manualVersion"></span></h1>
+      <h1><span data-i18n="app_title">YT 暱稱還原助手</span> <span class="tag" id="manualVersion"></span></h1>
 
       <div class="intro-card">
         <strong data-i18n="manual_intro_title">📖 簡介</strong><br />
         <span data-i18n="manual_intro_desc">
-        YT 暱稱還原助手 是一款專為 YouTube 觀眾設計的瀏覽器擴充功能。為了解決
-        YouTube 將使用者 ID 改為難以辨識的 Handle（如
-        <code>@User-xk9lp...</code>）的問題，本工具能在聊天室與留言區自動將這些代碼「還原」為使用者真實設定的頻道顯示名稱。
+          YT 暱稱還原助手 是一款專為 YouTube 觀眾設計的瀏覽器擴充功能，能在聊天室與留言區自動將 @ID 還原為真實頻道名稱，並支援本機自訂暱稱與備註。
         </span>
       </div>
 
-      <h2 data-i18n="manual_privacy_title">🛡️ 隱私與技術原理</h2>
+      <h2 data-i18n="manual_privacy_title">🛡️ 隱私與運作方式</h2>
       <p data-i18n="manual_privacy_desc">
-        本工具堅持
-        <strong>「本地運作、隱私優先」</strong>，所有查詢動作皆由您的瀏覽器直接發送至
-        YouTube，確保您的瀏覽隱私絕對安全。
+        本工具堅持「完全本機運作、隱私優先」，所有查詢動作皆由您的瀏覽器直接向 YouTube 進行，不會上傳任何資料至第三方伺服器。
       </p>
       <ul>
         <li>
-          <strong data-i18n="manual_privacy_1_title">本地爬蟲技術：</strong> 
-          <span data-i18n="manual_privacy_1_desc">當擴充功能發現未知的 <code>@ID</code> 時，會在背景對 YouTube 官方頻道頁面發出請求。</span>
+          <strong data-i18n="manual_privacy_1_title">直接向 YouTube 查詢：</strong>
+          <span data-i18n="manual_privacy_1_desc">遇到尚未記錄的 @ID 時，會在背景直接查詢對應的 YouTube 頻道公開資訊。</span>
         </li>
         <li>
-          <strong data-i18n="manual_privacy_2_title">智慧資料提取 (Smart Extraction)：</strong>
-          <span data-i18n="manual_privacy_2_desc">程式僅下載網頁原始碼，不會載入任何圖片或影片，並透過演算法精準提取其中的 JSON 資料結構，將流量與記憶體消耗降至最低。</span>
+          <strong data-i18n="manual_privacy_2_title">精簡低流量設計：</strong>
+          <span data-i18n="manual_privacy_2_desc">僅讀取必要的頻道名稱與訂閱資訊，不會載入圖片或影片，將流量與記憶體消耗降至最低。</span>
         </li>
         <li>
-          <strong data-i18n="manual_privacy_3_title">本地快取 (Local Cache)：</strong>
-          <span data-i18n="manual_privacy_3_desc">查詢過的名稱會儲存在您電腦的硬碟中，避免重複請求。</span>
+          <strong data-i18n="manual_privacy_3_title">本機快速快取：</strong>
+          <span data-i18n="manual_privacy_3_desc">查詢過的名稱會保存在您的瀏覽器中（預設 15 天更新、30 天自動清理），不重複查詢。</span>
         </li>
       </ul>
 
@@ -239,7 +234,17 @@
       </div>
 
       <h2 data-i18n="manual_features_title">🚀 主要功能與圖示說明</h2>
-      
+
+      <h3 data-i18n="manual_local_notes_title">📝 本機自訂暱稱與備註</h3>
+      <p data-i18n="manual_local_notes_desc">
+        在直播聊天室中點擊任一觀眾的頭像，即可開啟本機筆記面板（可於設定中開關，預設開啟）：
+      </p>
+      <ul>
+        <li data-i18n="manual_local_notes_1">自訂暱稱：為常客設定專屬綽號，聊天室中會以藍色標籤 [暱稱] 顯示在名稱旁。</li>
+        <li data-i18n="manual_local_notes_2">個人備註：自由新增或刪除多則文字備註，有備註時頭像會顯示外框標記，滑鼠移上頭像即可預覽。</li>
+        <li data-i18n="manual_local_notes_3">完全本機保存：自訂暱稱與備註獨立儲存在您的瀏覽器中，不會上傳，清除頻道名稱快取時也不會遺失。</li>
+      </ul>
+
       <h3 data-i18n="manual_tooltip_title">智慧資訊卡 (Tooltip)</h3>
       <p data-i18n="manual_tooltip_desc">滑鼠懸停在還原後的名稱上，可查看詳細資訊與訂閱數等級：</p>
       <ul style="list-style: none; padding-left: 10px">
@@ -265,9 +270,8 @@
         </li>
       </ul>
 
-      <!-- 系統保險絲章節 -->
       <h2 data-i18n="manual_fuse_section_title">⚡ 系統保險絲機制 (System Fuse)</h2>
-      <p data-i18n="manual_fuse_intro">為了因應 YouTube 改版或無預警的介面更新，本工具內建了兩道「安全保險絲」。當系統偵測到大量的錯誤或異常行為時，會自動「熔斷」以保護您的瀏覽體驗。</p>
+      <p data-i18n="manual_fuse_intro">為了因應 YouTube 改版或異常狀況，本工具內建兩道安全保護機制，必要時會自動暫停以保護您的瀏覽體驗。</p>
 
       <div class="fuse-card">
         <div class="fuse-icon">🖥️</div>
@@ -293,36 +297,33 @@
         </div>
       </div>
 
-      <!-- 新增設定說明區塊 -->
       <h3 data-i18n="manual_settings_title">⚙️ 偏好設定與效能優化</h3>
       <ul style="list-style-type: disc; padding-left: 20px;">
-        <li data-i18n="manual_settings_ttl">過期時間 (TTL)：資料超過此天數後會標記為過期，下次遇到時會嘗試背景更新。</li>
-        <li data-i18n="manual_settings_del">自動刪除：資料超過此天數後會從硬碟永久移除，釋放空間。</li>
+        <li data-i18n="manual_settings_ttl">過期時間：資料超過此天數後會標記為過期，下次遇到時會嘗試背景更新。</li>
+        <li data-i18n="manual_settings_del">自動刪除：資料超過此天數後會從本機自動移除，釋放空間。</li>
         <li data-i18n="manual_settings_speed">抓取頻率：提供「普通」與「慢速」模式。若遇到 YouTube 限制，可切換至慢速模式。</li>
       </ul>
 
-      <!-- 新增指定抓取說明區塊 -->
       <h3 data-i18n="manual_force_title">🧪 指定重新抓取 (實驗室)</h3>
       <p data-i18n="manual_force_desc">
-        在管理頁面中點擊「指定重新抓取」按鈕，可手動輸入 Handle ID (例如 @pewdiepie) 強制系統忽略快取，立即向 YouTube 查詢最新資料。
+        在管理頁面中點擊「指定重新抓取」按鈕，可手動輸入 Handle ID (例如 @pewdiepie) 強制忽略快取，立即向 YouTube 查詢最新資料。
       </p>
 
       <h2 data-i18n="manual_community_title">🔗 社群分享與協作應用</h2>
       <div class="streamer-box">
         <span class="streamer-title" data-i18n="manual_json_title">💡 活用 JSON 檔案建立社群連結</span>
         <p data-i18n="manual_json_desc">
-          本工具的「匯入/匯出」功能不僅是用於個人備份，更是連結 YouTube 與
-          Discord 社群的橋樑。
+          本工具的「匯入/匯出」功能不僅是用於個人備份，更是連結 YouTube 與 Discord 社群的橋樑。
         </p>
 
         <p>
           <strong data-i18n="manual_community_1_title">建立社群共用名單</strong><br />
-          <span data-i18n="manual_community_1_desc">社群管理者或熱心成員可將收集完整的暱稱資料 <strong>「匯出」</strong> 為 JSON 檔，並分享至 Discord 伺服器供成員下載。</span>
+          <span data-i18n="manual_community_1_desc">社群管理者或熱心成員可將收集完整的暱稱資料「匯出」為 JSON 檔，並分享至 Discord 伺服器供成員下載。</span>
         </p>
 
         <p>
           <strong data-i18n="manual_community_2_title">強化社群凝聚力 (Discord 引流)</strong><br />
-          <span data-i18n="manual_community_2_desc">透過分享「懶人包」或「認證名單」，可吸引 YouTube 觀眾加入 Discord 獲取資源。新成員匯入名單後，能立即辨識聊天室中的常客與會員，大幅降低陌生感，提升互動體驗。</span>
+          <span data-i18n="manual_community_2_desc">新成員匯入名單後，能立即辨識聊天室中的常客與會員，大幅降低陌生感，提升互動體驗。</span>
         </p>
       </div>
 
@@ -331,14 +332,14 @@
         <span class="highlight-title" data-i18n="manual_step_title">操作步驟</span>
         <ol>
           <li data-i18n="manual_step_1">點擊瀏覽器右上角的擴充功能圖示。</li>
-          <li data-i18n="manual_step_2">點擊 <strong>「📋 開啟快取管理頁面」</strong>。</li>
-          <li data-i18n="manual_step_3">點擊右上角的 <strong>匯入 (Import)</strong> 按鈕並選擇檔案。</li>
+          <li data-i18n="manual_step_2">點擊「📋 開啟快取管理頁面」。</li>
+          <li data-i18n="manual_step_3">點擊右上角的 匯入 (Import) 按鈕並選擇檔案。</li>
           <li>
             <span data-i18n="manual_step_4">在跳出的視窗中選擇匯入模式：</span>
             <ul>
               <li>
                 <strong data-i18n="btn_trust">🛡️ 信任匯入：</strong>
-                <span data-i18n="manual_trust_desc">系統將保留資料的原始時間戳記。但為了確保資料準確性，<strong>含有訂閱數</strong>的資料仍會被標記為過期並自動重新驗證。</span>
+                <span data-i18n="manual_trust_desc">系統將保留資料的原始時間戳記。但為了確保資料準確性，含有訂閱數的資料仍會被標記為過期並自動重新驗證。</span>
               </li>
               <li>
                 <strong data-i18n="btn_safe">⚠️ 安全匯入：</strong>
@@ -361,16 +362,16 @@
       <div class="faq-item">
         <span class="q" data-i18n="manual_q4">Q: 出現無法還原或 [OUTPUT NOT AVAILABLE]？</span>
         <div class="a" data-i18n="manual_a4">
-          A: 這是 YouTube 的暫時性限制（防爬蟲機制）。請休息 5 分鐘後再試，或在設定中切換為「慢速模式」。
+          A: 這是 YouTube 的暫時性限制。請休息 5 分鐘後再試，或在設定中切換為「慢速模式」。
         </div>
       </div>
     </div>
 
-    <!-- 引入 I18n 與設定 -->
     <script src="../../js/shared/config.js"></script>
     <script src="../../js/shared/utils.js"></script>
     <script src="../../js/shared/locales.js"></script>
     <script src="../../js/shared/i18n.js"></script>
+    <script src="../../js/shared/theme.js"></script>
     <script src="manual.js"></script>
   </body>
 </html>

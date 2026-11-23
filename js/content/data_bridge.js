@@ -10,6 +10,12 @@ const DataBridge = {
   // 需要知道後端保險絲狀態，因為這決定了是否能發送網路請求
   fuseBackendStatus: "NORMAL",
 
+  // 頁內記憶體快取與進行中請求去重：同一人連續發言不重複發 IPC
+  MAX_PAGE_CACHE: 2000,
+  pageCache: new Map(), // normHandle -> { name, subs, ts }
+  inFlight: new Map(), // normHandle -> [callback, ...]
+  refreshing: new Map(), // normHandle -> [callback, ...]
+
   init: function () {
     this.syncSettings();
   },
@@ -26,12 +32,12 @@ const DataBridge = {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === "local") {
         if (changes[SETTINGS_KEY]) {
-            this.updateTTL(changes[SETTINGS_KEY].newValue);
+          this.updateTTL(changes[SETTINGS_KEY].newValue);
         }
         // 監聽後端保險絲
         if (changes[FUSE_BE_KEY]) {
-            this.fuseBackendStatus =
-              changes[FUSE_BE_KEY].newValue?.status || "NORMAL";
+          this.fuseBackendStatus =
+            changes[FUSE_BE_KEY].newValue?.status || "NORMAL";
         }
       }
     });
@@ -45,65 +51,127 @@ const DataBridge = {
     this.currentTTL = daysToMs(days);
   },
 
+  normalizeKey: function (handle) {
+    return String(handle || "").trim().toLowerCase();
+  },
+
+  rememberPageCache: function (key, entry) {
+    if (this.pageCache.has(key)) this.pageCache.delete(key);
+    else if (this.pageCache.size >= this.MAX_PAGE_CACHE) {
+      this.pageCache.delete(this.pageCache.keys().next().value);
+    }
+    this.pageCache.set(key, entry);
+  },
+
+  decodeName: function (raw) {
+    let finalName = raw;
+    if (typeof decodeHtmlEntities === "function") {
+      finalName = decodeHtmlEntities(finalName);
+    }
+    return finalName;
+  },
+
   // === 核心方法：獲取資料 ===
   // 參數：
   // - handle: 要查詢的 ID
   // - callback: 當拿到資料時執行的函式 (data) => void
-  getData: async function (handle, callback) {
-    if (!handle) return;
+  getData: function (handle, callback) {
+    if (!handle || typeof callback !== "function") return;
+    const key = this.normalizeKey(handle);
+    if (!key) return;
 
-    // 1. 先向背景查詢快取 (Cache First)
-    let cachedData = null;
-    try {
-      cachedData = await this.queryCache(handle);
-    } catch (e) {
-      // 擴充功能更新後舊分頁的連線會失效，回報無資料讓畫面維持原樣
-      callback(null);
+    // 1. 頁內快取直接命中 (0 IPC)
+    const local = this.pageCache.get(key);
+    if (local) {
+      const isExpired = Date.now() - (local.ts || 0) > this.currentTTL;
+      callback({ name: local.name, subs: local.subs || 0, isExpired });
+      if (isExpired && this.fuseBackendStatus === "NORMAL") {
+        this.scheduleRefresh(handle, key, callback);
+      }
       return;
     }
 
-    // 2. 判斷資料狀態
-    if (cachedData) {
-      // [情況 A] 快取命中且有效
-      if (!cachedData.isExpired) {
-        callback(cachedData);
-        return;
-      }
+    // 2. 同一個 handle 正在查詢中：合併等待，避免重複發送 IPC
+    if (this.inFlight.has(key)) {
+      this.inFlight.get(key).push(callback);
+      return;
+    }
 
-      // [情況 B] 快取命中但已過期
-      // 這裡無論後端保險絲狀態如何，都先回傳快取資料 (確保畫面有內容)
-      callback(cachedData);
-      
-      // 只有當「後端保險絲正常」時，才發起背景更新
-      // 如果後端熔斷，就只顯示舊資料，不發送網路請求，避免進一步錯誤
-      if (this.fuseBackendStatus === "NORMAL") {
-        this.fetchBackground(handle, "low", callback); // 低優先級更新
-      }
-    } else {
-      // [情況 C] 無快取
-      // 如果後端熔斷，無法抓取也無快取，只好放棄
-      if (this.fuseBackendStatus === "TRIPPED") {
-        callback(null);
-        return;
-      }
-      
-      // 只有後端正常時才發起高優先級請求
-      this.fetchBackground(handle, "high", callback);
+    this.inFlight.set(key, [callback]);
+
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: "RESOLVE_CHANNEL_INFO",
+          handle: handle,
+          ttlMs: this.currentTTL,
+        },
+        (response) => {
+          const waiters = this.inFlight.get(key) || [];
+          this.inFlight.delete(key);
+
+          if (chrome.runtime.lastError || !response || !response.success) {
+            waiters.forEach((cb) => cb(null));
+            return;
+          }
+
+          const rawName = response.fromCache ? response.name : response.nameRaw;
+          const finalName = response.fromCache ? rawName : this.decodeName(rawName);
+          if (!finalName || finalName === "YouTube") {
+            waiters.forEach((cb) => cb(null));
+            return;
+          }
+
+          const ts = response.ts || Date.now();
+          const subs = response.subs || 0;
+          const isExpired = response.isExpired === true;
+
+          this.rememberPageCache(key, { name: finalName, subs, ts });
+          const payload = { name: finalName, subs, isExpired };
+          waiters.forEach((cb) => cb(payload));
+
+          if (isExpired && this.fuseBackendStatus === "NORMAL") {
+            waiters.forEach((cb) => this.scheduleRefresh(handle, key, cb));
+          }
+        }
+      );
+    } catch (e) {
+      const waiters = this.inFlight.get(key) || [];
+      this.inFlight.delete(key);
+      waiters.forEach((cb) => cb(null));
     }
   },
 
-  // === 內部：查詢快取 ===
+  // 過期資料的背景低優先級更新（同 handle 去重）
+  scheduleRefresh: function (handle, key, callback) {
+    if (this.refreshing.has(key)) {
+      this.refreshing.get(key).push(callback);
+      return;
+    }
+    this.refreshing.set(key, [callback]);
+    this.fetchBackground(handle, "low", (fresh) => {
+      const waiters = this.refreshing.get(key) || [];
+      this.refreshing.delete(key);
+      if (!fresh) return;
+      this.rememberPageCache(key, {
+        name: fresh.name,
+        subs: fresh.subs || 0,
+        ts: Date.now(),
+      });
+      waiters.forEach((cb) => cb(fresh));
+    });
+  },
+
+  // === 內部：查詢快取 (保留給外部/舊呼叫相容) ===
   queryCache: function (handle) {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(
         { type: "CACHE_GET", handle: handle },
         (response) => {
-          // 背景服務重啟或擴充功能更新時 lastError 會有值
           if (chrome.runtime.lastError || !response) {
             resolve(null);
             return;
           }
-          // 計算過期狀態
           const ts = response.ts || 0;
           const isExpired = Date.now() - ts > this.currentTTL;
 
@@ -129,25 +197,19 @@ const DataBridge = {
         refresh: isExpiredUpdate,
       },
       (response) => {
-        // 錯誤處理
         if (chrome.runtime.lastError || !response || !response.success) {
-          // 網路請求失敗，默默不做事 (如果是 expired update)
-          // 或者回傳 null (如果是 high priority)
-          if (typeof callback === "function" && !isExpiredUpdate) {
+          if (typeof callback === "function") {
             callback(null);
           }
           return;
         }
 
-        // 資料解碼
-        let finalName = response.nameRaw;
-        if (typeof decodeHtmlEntities === "function") {
-          finalName = decodeHtmlEntities(finalName);
+        const finalName = this.decodeName(response.nameRaw);
+        if (!finalName || finalName === "YouTube") {
+          if (typeof callback === "function") callback(null);
+          return;
         }
 
-        if (finalName === "YouTube") return;
-
-        // 回傳最新資料 (此時肯定不過期)
         callback({
           name: finalName,
           subs: response.subs || 0,
@@ -157,4 +219,4 @@ const DataBridge = {
     );
   },
 };
-DataBridge.init();
+DataBridge.init();

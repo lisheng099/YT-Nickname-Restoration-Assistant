@@ -1,10 +1,10 @@
 {
   "appName": {
-    "message": "YT 昵称还原助手",
-    "description": "Extension Name"
+    "description": "Extension Name",
+    "message": "YT 昵称还原助手"
   },
   "appDesc": {
-    "message": "将 YouTube 聊天室与留言区的账户代称(@ID)自动替换为昵称(频道显示名称)。采用本地背景爬虫技术，不传输数据至第三方服务器。",
-    "description": "Extension Description"
+    "description": "Extension Description",
+    "message": "在 YouTube 直播聊天室与评论区自动将 @ID 还原为真实频道名称，并支持本地自定义昵称与备注，全程本地运行、不上传任何数据。"
   }
 }

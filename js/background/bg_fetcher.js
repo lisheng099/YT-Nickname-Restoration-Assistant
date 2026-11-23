@@ -22,11 +22,15 @@ const BgFetcher = {
   // 使用方式：在背景頁面的 Console 輸入 BgFetcher.SIMULATE_ERROR = 'PARSE'
   SIMULATE_ERROR: null, // 可選值: null (正常), 'NETWORK' (網路錯誤), 'PARSE' (解析失敗)
 
-  DELAY: { MIN: 1500, MAX: 3000 },
-  
+  speedMode: "NORMAL",
+  maxConcurrency: 3,
+  activeWorkers: 0,
+  nextFetchAt: 0,
+  DELAY: { MIN: 350, MAX: 700 },
+
   tabQuotas: new Map(),
-  initialPollQuota: 20,
-  INITIAL_POLL_DELAY: { MIN: 100, MAX: 300 },
+  initialPollQuota: 40,
+  INITIAL_POLL_DELAY: { MIN: 60, MAX: 150 },
 
   init: function () {
     chrome.storage.local.get([AppConfig.FETCH_SPEED_KEY, AppConfig.FUSE_BE_KEY], (res) => {
@@ -104,12 +108,42 @@ const BgFetcher = {
   updateSpeedMode: function (mode) {
     const presets = AppConfig.SPEED_PRESETS;
     if (presets && presets[mode]) {
+      this.speedMode = mode;
       this.DELAY = { MIN: presets[mode].MIN, MAX: presets[mode].MAX };
-      // 顯示時間範圍
+      this.maxConcurrency =
+        typeof presets[mode].CONCURRENCY === "number"
+          ? presets[mode].CONCURRENCY
+          : mode === "SLOW"
+            ? 1
+            : 3;
       Logger.info(
-        `[BgFetcher] 速度模式更新: ${mode} (${this.DELAY.MIN}-${this.DELAY.MAX}ms)`
+        `[BgFetcher] 速度模式更新: ${mode} (${this.DELAY.MIN}-${this.DELAY.MAX}ms, 併發=${this.maxConcurrency})`
       );
     }
+  },
+
+  // 動態併發數：正常模式最多 3 條；一旦遇錯或安全模式立即降回單線程
+  effectiveConcurrency: function () {
+    if (this.fuseBackend.status === "TRIPPED") return 0;
+    if (this.consecutiveErrors > 0 || this.speedMode === "SLOW") return 1;
+    const threshold =
+      (AppConfig.FUSE_CONFIG && AppConfig.FUSE_CONFIG.BACKEND_ERROR_THRESHOLD) || 10;
+    return Math.max(1, Math.min(this.maxConcurrency || 3, threshold));
+  },
+
+  // 為多條併發 worker 錯開啟動時間，避免同毫秒群發請求
+  reserveSlotDelay: function (minDelay, maxDelay) {
+    if (maxDelay <= 0) return 0;
+    const now = Date.now();
+    const gap = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+    if (this.lastFetchTime === 0) {
+      this.nextFetchAt = now;
+      return 0;
+    }
+    const base = Math.max(this.lastFetchTime, this.nextFetchAt || 0);
+    const scheduled = Math.max(now, base + gap);
+    this.nextFetchAt = scheduled;
+    return Math.max(0, scheduled - now);
   },
 
   fetch: function (
@@ -199,111 +233,113 @@ const BgFetcher = {
     }
   },
 
-  processQueue: async function () {
-    // 增加後端保險絲狀態檢查
-    if (this.isProcessing || this.fuseBackend.status === "TRIPPED") return;
-    if (this.queue.high.length === 0 && this.queue.low.length === 0) return;
+  processQueue: function () {
+    if (this.fuseBackend.status === "TRIPPED") return;
+    const limit = this.effectiveConcurrency();
+    while (
+      this.activeWorkers < limit &&
+      (this.queue.high.length > 0 || this.queue.low.length > 0)
+    ) {
+      this.activeWorkers++;
+      this.isProcessing = true;
+      this.runWorker();
+    }
+  },
 
-    this.isProcessing = true;
+  runWorker: async function () {
+    try {
+      while (this.queue.high.length > 0 || this.queue.low.length > 0) {
+        if (this.fuseBackend.status === "TRIPPED") break;
+        if (this.activeWorkers > this.effectiveConcurrency()) break;
 
-    while (this.queue.high.length > 0 || this.queue.low.length > 0) {
-      // 增加後端保險絲狀態檢查
-      if (this.fuseBackend.status === "TRIPPED") break;
+        const nextTask =
+          this.queue.high.length > 0 ? this.queue.high[0] : this.queue.low[0];
+        const currentTabId = nextTask.tabId;
 
-      const nextTask =
-        this.queue.high.length > 0 ? this.queue.high[0] : this.queue.low[0];
-      const currentTabId = nextTask.tabId;
+        // 判斷加速模式與動態退避
+        let isBurst = false;
+        let minDelay = this.DELAY.MIN;
+        let maxDelay = this.DELAY.MAX;
 
-      // 判斷加速模式
-      let isBurst = false;
-      let minDelay = this.DELAY.MIN;
-      let maxDelay = this.DELAY.MAX;
-
-      // 如果有額度且沒有後端連續錯誤，則允許加速
-      if (
-        currentTabId &&
-        this.tabQuotas.get(currentTabId) > 0 &&
-        this.consecutiveErrors === 0
-      ) {
-        isBurst = true;
-        minDelay = this.INITIAL_POLL_DELAY.MIN;
-        maxDelay = this.INITIAL_POLL_DELAY.MAX;
-      }
-
-      // 隨機延遲
-      const now = Date.now();
-      const elapsed = now - this.lastFetchTime;
-      const requiredDelay =
-        Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-
-      if (elapsed < requiredDelay) {
-        await new Promise((r) => setTimeout(r, requiredDelay - elapsed));
-      }
-
-      // 等待期間保險絲可能已熔斷並清空佇列
-      if (this.fuseBackend.status === "TRIPPED") break;
-
-      // 取出任務
-      const task =
-        this.queue.high.length > 0
-          ? this.queue.high.shift()
-          : this.queue.low.shift();
-      if (!task) break;
-      const handle = task.handle;
-      const key = task.key;
-
-      try {
-        // 顯示距上次抓取時間
-        const currentGap = Date.now() - this.lastFetchTime;
-        const gapInfo =
-          this.lastFetchTime === 0 ? "首次執行" : `${currentGap}ms`;
-
-        Logger.info(`[Fetch Start] 正在抓取 ${handle}... (距上次: ${gapInfo})`);
-
-        this.lastFetchTime = Date.now();
-        const result = await this.doNetworkFetch(handle);
-
-        if (result.success) {
-          // 顯示訂閱數
-          Logger.green(
-            `[Fetch OK] ${handle} -> ${result.nameRaw} (${result.subs})`
-          );
-
-          // 寫入 Cache
-          const entry = { name: result.nameRaw, subs: result.subs };
-          if (result.channelId) entry.cid = result.channelId;
-          BgCache.set(handle, entry);
-          
-          // 成功時重置錯誤計數與失敗快取
-          this.consecutiveErrors = 0;
-          this.failedLookups.delete(key);
-
-          if (isBurst && currentTabId) {
-            const left = this.tabQuotas.get(currentTabId) - 1;
-            this.tabQuotas.set(currentTabId, left);
-            // 顯示剩餘額度
-            Logger.info(`[Burst] Tab ${currentTabId} 剩餘額度: ${left}`);
-          }
-        } else {
-          Logger.orange(`[Fetch Fail] ${handle}: ${result.error}`);
-          this.rememberFailure(key, result);
+        if (
+          currentTabId &&
+          this.tabQuotas.get(currentTabId) > 0 &&
+          this.consecutiveErrors === 0
+        ) {
+          isBurst = true;
+          minDelay = this.INITIAL_POLL_DELAY.MIN;
+          maxDelay = this.INITIAL_POLL_DELAY.MAX;
+        } else if (this.consecutiveErrors > 0 && maxDelay > 0) {
+          // 遇到 429 或錯誤時指數退避 (2x -> 4x -> 8x)
+          const mult = Math.min(8, 1 << Math.min(this.consecutiveErrors, 3));
+          minDelay = Math.max(minDelay, 1000) * mult;
+          maxDelay = Math.max(maxDelay, 1600) * mult;
         }
 
-        // 先回覆這個任務，再檢查健康度 (熔斷時會清空其餘等待者)
-        this.settleTask(key, result);
+        const waitMs = this.reserveSlotDelay(minDelay, maxDelay);
+        if (waitMs > 0) {
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
 
-        // 頻道不存在 (404) 屬於正常結果、使用者本身離線也不計，其餘失敗才計入健康度
-        if (!result.success && !result.notFound && !result.offline) {
+        if (this.fuseBackend.status === "TRIPPED") break;
+        if (this.activeWorkers > this.effectiveConcurrency()) break;
+
+        const task =
+          this.queue.high.length > 0
+            ? this.queue.high.shift()
+            : this.queue.low.shift();
+        if (!task) break;
+        const handle = task.handle;
+        const key = task.key;
+
+        try {
+          const currentGap = Date.now() - this.lastFetchTime;
+          const gapInfo =
+            this.lastFetchTime === 0 ? "首次執行" : `${currentGap}ms`;
+
+          Logger.info(`[Fetch Start] 正在抓取 ${handle}... (距上次: ${gapInfo})`);
+
+          this.lastFetchTime = Date.now();
+          const result = await this.doNetworkFetch(handle);
+
+          if (result.success) {
+            Logger.green(
+              `[Fetch OK] ${handle} -> ${result.nameRaw} (${result.subs})`
+            );
+
+            BgCache.set(handle, { name: result.nameRaw, subs: result.subs });
+
+            const hadErrors = this.consecutiveErrors > 0;
+            this.consecutiveErrors = 0;
+            this.failedLookups.delete(key);
+
+            if (isBurst && currentTabId) {
+              const left = Math.max(0, (this.tabQuotas.get(currentTabId) || 0) - 1);
+              this.tabQuotas.set(currentTabId, left);
+              Logger.info(`[Burst] Tab ${currentTabId} 剩餘額度: ${left}`);
+            }
+
+            if (hadErrors) this.processQueue();
+          } else {
+            Logger.orange(`[Fetch Fail] ${handle}: ${result.error}`);
+            this.rememberFailure(key, result);
+          }
+
+          this.settleTask(key, result);
+
+          if (!result.success && !result.notFound && !result.offline) {
+            this.checkBackendHealth();
+          }
+        } catch (err) {
+          Logger.red(`[Fetch Error] ${handle}:`, err);
+          this.settleTask(key, { error: err.message });
           this.checkBackendHealth();
         }
-      } catch (err) {
-        Logger.red(`[Fetch Error] ${handle}:`, err);
-        this.settleTask(key, { error: err.message });
-        this.checkBackendHealth();
       }
+    } finally {
+      this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+      this.isProcessing = this.activeWorkers > 0;
     }
-
-    this.isProcessing = false;
   },
 
   doNetworkFetch: async function (handle) {
@@ -336,8 +372,9 @@ const BgFetcher = {
     try {
       const response = await fetch(targetUrl, {
         method: "GET",
+        credentials: "omit",
         signal: controller.signal,
-        headers: { "Accept-Language": "zh-TW", "Cache-Control": "no-cache" },
+        headers: { "Accept-Language": "zh-TW" },
       });
 
       clearTimeout(timeoutId);
@@ -346,10 +383,17 @@ const BgFetcher = {
         return { error: "Too Many Requests", status: 429 };
       }
 
-      if (
-        response.url.includes("google.com/accounts") ||
-        response.url.includes("consent.youtube.com")
-      ) {
+      let redirectedToAuth = false;
+      try {
+        const u = new URL(response.url);
+        redirectedToAuth =
+          u.hostname === "accounts.google.com" ||
+          u.hostname === "consent.youtube.com" ||
+          (u.hostname.endsWith(".google.com") && u.pathname.startsWith("/accounts"));
+      } catch {
+        redirectedToAuth = false;
+      }
+      if (redirectedToAuth) {
         return { error: "Redirected to login", status: 429 };
       }
 
@@ -365,11 +409,8 @@ const BgFetcher = {
       const text = await this.readPageText(response, controller);
       const parsed = YTParser.parse(text);
 
-      if (parsed) {
-        const ok = { success: true, nameRaw: parsed.nameRaw, subs: parsed.subs };
-        if (parsed.channelId) ok.channelId = parsed.channelId;
-        return ok;
-      }
+      if (parsed)
+        return { success: true, nameRaw: parsed.nameRaw, subs: parsed.subs };
       
       // 解析失敗 (抓不到資料)
       return { error: "Name not found" };
@@ -382,8 +423,7 @@ const BgFetcher = {
   },
 
   // 讀取頻道頁面 HTML。頻道頁常達數百 KB，但名稱與訂閱數都在 ytInitialData 內，
-  // 一旦取得完整的 ytInitialData 就中斷下載，節省頻寬與記憶體。
-  // 沒有串流介面 (或讀取過程出錯) 時，退回一次讀完整份文字。
+  // 以 O(N) 增量掃描追蹤 ytInitialData 括號深度，一取得完整物件就中斷下載，省頻寬也省 CPU。
   readPageText: async function (response, controller) {
     const body = response.body;
     if (!body || typeof body.getReader !== "function") {
@@ -392,15 +432,75 @@ const BgFetcher = {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let text = "";
+    let jsonStart = -1;
+    let scanPos = 0;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let searchFrom = 0;
+
+    const hasCompleteInitialData = () => {
+      for (;;) {
+        if (jsonStart === -1) {
+          const idx = text.indexOf("ytInitialData", searchFrom);
+          if (idx === -1) {
+            searchFrom = Math.max(0, text.length - 16);
+            return false;
+          }
+          let p = idx + "ytInitialData".length;
+          while (p < text.length && /\s/.test(text[p])) p++;
+          if (p >= text.length) return false;
+          if (text[p] !== "=") {
+            searchFrom = p;
+            continue;
+          }
+          p++;
+          while (p < text.length && /\s/.test(text[p])) p++;
+          if (p >= text.length) return false;
+          if (text[p] !== "{") {
+            searchFrom = p;
+            continue;
+          }
+          jsonStart = p;
+          scanPos = p;
+          depth = 0;
+          inString = false;
+          escaped = false;
+        }
+        for (; scanPos < text.length; scanPos++) {
+          const ch = text[scanPos];
+          if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === "\\") escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+          }
+          if (ch === '"') inString = true;
+          else if (ch === "{") depth++;
+          else if (ch === "}") {
+            depth--;
+            if (depth === 0) {
+              try {
+                JSON.parse(text.slice(jsonStart, scanPos + 1));
+                return true;
+              } catch (e) {
+                searchFrom = scanPos + 1;
+                jsonStart = -1;
+                break;
+              }
+            }
+          }
+        }
+        if (jsonStart !== -1) return false;
+      }
+    };
+
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
-        if (
-          text.includes("ytInitialData") &&
-          YTParser.extractInitialData(text)
-        ) {
+        if (hasCompleteInitialData()) {
           // 名稱備援 (og:title) 位於 <head>，一定在 ytInitialData 之前，已經讀到
           try {
             await reader.cancel();

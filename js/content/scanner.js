@@ -273,7 +273,7 @@ class PageScanner {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["href", "id", "class"],
+      attributeFilter: ["href", "id", "class", "data-rn-cid"],
     });
   }
 
@@ -335,7 +335,7 @@ class PageScanner {
             }
           }
         });
-      } else if (m.type === "attributes") {
+      } else if (m.type === "attributes" && m.attributeName !== "data-rn-cid") {
         const target = m.target;
         if (target.matches && target.matches(this.masterSelector)) {
           this.mutationQueue.add(target);
@@ -529,7 +529,7 @@ class PageScanner {
           if (mode === this.MODE.STANDARD) {
             // 雙節點：原生文字已不是 handle，移除獨立節點並還原顯示
             if (el.dataset.rnDual) TooltipManager.restoreDual(el);
-            // YouTube 以非 handle 的名稱重新繪製了這個元素：清除上一位留下的狀態
+            // YouTube 以非 handle 的名稱重新繪製了這個元素：清除上一位觀眾留下的狀態
             if (el.dataset.rnReplaced === "yes" && !el.querySelector("[data-rn-span]")) {
               delete el.dataset.rnReplaced;
               delete el.dataset.rnTargetHandle;

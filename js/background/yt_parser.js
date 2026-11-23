@@ -50,29 +50,10 @@ const YTParser = {
     let numericSubs = subs ? this.parseSubsString(subs) : 0;
     if (numericSubs < 500) numericSubs = 0; // 過濾 500 以下的訂閱數
 
-    const result = { nameRaw: name, subs: numericSubs };
-    const channelId = this.extractChannelId(jsonData, htmlText);
-    if (channelId) result.channelId = channelId;
-    return result;
-  },
-
-  CHANNEL_ID: /^UC[A-Za-z0-9_-]{22}$/,
-
-  // 頻道 ID (UC...)：與 handle 不同，頻道更名後仍維持不變
-  extractChannelId: function (jsonData, htmlText) {
-    const candidates = [
-      jsonData?.metadata?.channelMetadataRenderer?.externalId,
-      jsonData?.header?.c4TabbedHeaderRenderer?.channelId,
-      jsonData?.microformat?.microformatDataRenderer?.urlCanonical?.split("/channel/")[1],
-    ];
-    const m =
-      htmlText.match(/<link\s+rel="canonical"\s+href="[^"]*\/channel\/(UC[A-Za-z0-9_-]{22})"/i) ||
-      htmlText.match(/<meta\s+itemprop="(?:identifier|channelId)"\s+content="(UC[A-Za-z0-9_-]{22})"/i);
-    if (m) candidates.push(m[1]);
-    for (const id of candidates) {
-      if (typeof id === "string" && this.CHANNEL_ID.test(id)) return id;
-    }
-    return null;
+    return {
+      nameRaw: name,
+      subs: numericSubs,
+    };
   },
 
   // 以括號配對擷取 ytInitialData，字串內容含有 "};" 時也能完整取出
@@ -135,7 +116,8 @@ const YTParser = {
     return null;
   },
 
-  SUBS_KEYWORDS: /訂閱|订阅|subscriber|登録者|구독자/i,
+  SUBS_KEYWORDS:
+    /訂閱|订阅|subscriber|登録者|구독자|abonnés|abonnenten|suscriptores|inscritos|iscritti|ผู้ติดตาม|người đăng ký/i,
 
   extractMetaTitle: function (htmlText) {
     const m =
@@ -146,30 +128,41 @@ const YTParser = {
     return m[1].trim() || null;
   },
 
-  // 輔助函式：將訂閱數字串轉為數字
+  // 輔助函式：將訂閱數字串轉為數字（支援各語系單位與歐洲小數逗號如 "1,5 k"、"1,2 Mio."）
   parseSubsString: function (str) {
     if (!str) return 0;
-    const numMatch = String(str).replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    const normalized = String(str).normalize("NFKC");
+    const numMatch = normalized.match(/\d[\d.,\u00a0\u202f\s]*\d|\d/);
     if (!numMatch) return 0;
-    let val = parseFloat(numMatch[0]);
+    const rawNum = numMatch[0].replace(/[\u00a0\u202f\s]/g, "");
+    const rest = normalized.slice(numMatch.index + numMatch[0].length).trim();
+
+    let mult = 1;
+    const restLower = rest.toLowerCase();
+    const first = rest.charAt(0);
+    const firstUpper = first.toUpperCase();
+    if (first === "億" || first === "亿" || first === "억") mult = 100000000;
+    else if (first === "萬" || first === "万" || first === "만") mult = 10000;
+    else if (first === "千" || first === "천") mult = 1000;
+    else if (/^(?:mrd|bn)\b/i.test(restLower) || firstUpper === "B") mult = 1000000000;
+    else if (/^(?:mio|mln)\b/i.test(restLower) || firstUpper === "M") mult = 1000000;
+    else if (/^(?:tsd|mil)\b/i.test(restLower) || firstUpper === "K") mult = 1000;
+
+    let clean = rawNum;
+    const lastComma = clean.lastIndexOf(",");
+    const lastDot = clean.lastIndexOf(".");
+    const afterComma = clean.length - lastComma - 1;
+    if (
+      lastComma > lastDot &&
+      ((mult > 1 && afterComma >= 1 && afterComma <= 2) || (lastDot !== -1 && afterComma >= 1 && afterComma <= 2))
+    ) {
+      clean = clean.replace(/\./g, "").replace(",", ".");
+    } else {
+      clean = clean.replace(/,/g, "");
+    }
+    const val = parseFloat(clean);
     if (isNaN(val)) return 0;
-
-    // 只看數字後面的單位，避免 "subscribers" 的字母被誤判
-    const rest = String(str)
-      .replace(/,/g, "")
-      .slice(numMatch.index + numMatch[0].length)
-      .trim();
-    const unit = rest.charAt(0);
-    const unitUpper = unit.toUpperCase();
-
-    if (unit === "億" || unit === "亿" || unit === "억") val *= 100000000;
-    else if (unit === "萬" || unit === "万" || unit === "만") val *= 10000;
-    else if (unit === "千" || unit === "천") val *= 1000;
-    else if (unitUpper === "K") val *= 1000;
-    else if (unitUpper === "M") val *= 1000000;
-    else if (unitUpper === "B") val *= 1000000000;
-
-    return Math.floor(val);
+    return Math.floor(val * mult);
   },
 };
 

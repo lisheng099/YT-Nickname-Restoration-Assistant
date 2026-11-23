@@ -5,10 +5,10 @@
     <title data-i18n="app_title">YT 暱稱還原助手</title>
     <style>
       html {
-        overflow: hidden; 
+        overflow: hidden;
       }
       body {
-        width: 300px; 
+        width: 308px;
         margin: 0;
         padding: 10px;
         box-sizing: border-box;
@@ -18,24 +18,12 @@
         background-color: #f9f9f9;
         overflow: hidden;
       }
-      
-      /* 隱藏 Chrome 捲軸 */
-      body::-webkit-scrollbar { 
-        display: none; 
-      }
-
-      .header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #ddd;
-        flex-wrap: nowrap;
+      body::-webkit-scrollbar {
+        display: none;
       }
       h1 {
         font-size: 15px;
-        margin: 0 0 6px;
+        margin: 0 0 8px;
         color: #0f0f0f;
       }
       .badge {
@@ -54,6 +42,17 @@
         text-align: center;
         border: 1px solid #eee;
       }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .stat-cell {
+        padding: 2px 4px;
+      }
+      .stat-cell + .stat-cell {
+        border-left: 1px solid #e0e0e0;
+      }
       .status-num {
         font-size: 16px;
         font-weight: bold;
@@ -61,24 +60,22 @@
         display: block;
         margin-bottom: 2px;
       }
+      .status-num.notes {
+        color: #1565c0;
+      }
       .status-desc {
         color: #666;
         font-size: 11px;
       }
-      
-      /* 膠囊式保險絲 UI */
       .fuse-container {
-        display: none; /* 預設隱藏，只有在熔斷或 Debug 模式下才顯示 */
+        display: none;
         gap: 8px;
         margin-bottom: 8px;
         justify-content: space-between;
       }
-      
-      /* 顯示狀態的 Class */
       .fuse-container.show {
         display: flex;
       }
-      
       .fuse-capsule {
         flex: 1;
         display: flex;
@@ -91,42 +88,33 @@
         background: #fff;
         cursor: pointer;
         transition: all 0.2s;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         user-select: none;
       }
-      
       .fuse-capsule:hover {
         transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
-      
       .fuse-capsule:active {
         transform: translateY(0);
       }
-
-      /* 正常狀態 (綠色) */
       .fuse-capsule.normal {
         border-color: #81c784;
         color: #2e7d32;
         background: #e8f5e9;
       }
-
-      /* 熔斷狀態 (紅色) */
       .fuse-capsule.tripped {
         border-color: #e57373;
         color: #c62828;
         background: #ffebee;
       }
-
       .fuse-icon {
         font-size: 12px;
       }
-      
       .fuse-label {
         font-size: 11px;
         font-weight: 600;
       }
-
       .btn {
         width: 100%;
         padding: 7px;
@@ -147,12 +135,12 @@
         background: #f0f0f0;
         border-color: #999;
       }
-
       .settings-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 5px;
+        font-size: 13px;
       }
       .settings-input {
         width: 50px;
@@ -204,14 +192,94 @@
         border-top: 1px solid #eee;
         padding-top: 4px;
       }
+      html[data-theme="dark"] body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+      }
+      html[data-theme="dark"] h1 {
+        color: #f8fafc;
+      }
+      html[data-theme="dark"] .badge {
+        background: #1e3a5f;
+        color: #93c5fd;
+      }
+      html[data-theme="dark"] .status-card {
+        background: #1e293b;
+        border-color: #334155;
+      }
+      html[data-theme="dark"] .stat-cell + .stat-cell {
+        border-left-color: #334155;
+      }
+      html[data-theme="dark"] .status-num {
+        color: #4ade80;
+      }
+      html[data-theme="dark"] .status-num.notes {
+        color: #60a5fa;
+      }
+      html[data-theme="dark"] .status-desc {
+        color: #94a3b8;
+      }
+      html[data-theme="dark"] .settings-input,
+      html[data-theme="dark"] .settings-select {
+        background: #0f172a;
+        color: #f1f5f9;
+        border-color: #475569;
+      }
+      html[data-theme="dark"] .btn {
+        background: #1e293b;
+        border-color: #475569;
+        color: #e2e8f0;
+      }
+      html[data-theme="dark"] .btn:hover {
+        background: #334155;
+        border-color: #64748b;
+      }
+      html[data-theme="dark"] .btn-save {
+        background: #2e7d32;
+        color: #fff;
+        border: none;
+      }
+      html[data-theme="dark"] .btn-save:hover {
+        background: #1b5e20;
+      }
+      html[data-theme="dark"] #openManualBtn {
+        background: #1e3a5f !important;
+        border-color: #3b82f6 !important;
+        color: #93c5fd !important;
+      }
+      html[data-theme="dark"] .fuse-capsule.normal {
+        background: #14532d;
+        border-color: #22c55e;
+        color: #86efac;
+      }
+      html[data-theme="dark"] .fuse-capsule.tripped {
+        background: #7f1d1d;
+        border-color: #ef4444;
+        color: #fca5a5;
+      }
+      html[data-theme="dark"] .footer-container {
+        border-top-color: #334155;
+      }
+      html[data-theme="dark"] hr {
+        border-top-color: #334155 !important;
+      }
     </style>
   </head>
   <body>
-    <h1><span data-i18n="app_title">YT 暱稱還原助手</span> <span class="badge" id="appVersion"></span></h1>
+    <h1>
+      <span data-i18n="app_title">YT 暱稱還原助手</span>
+      <span class="badge" id="appVersion"></span>
+    </h1>
 
-    <div class="status-card">
-      <span id="countText" class="status-num">...</span>
-      <span class="status-desc" data-i18n="cached_nicknames">已快取的暱稱</span>
+    <div class="status-card stats-grid">
+      <div class="stat-cell">
+        <span id="countText" class="status-num">...</span>
+        <span class="status-desc" data-i18n="cached_nicknames">已快取的暱稱</span>
+      </div>
+      <div class="stat-cell">
+        <span id="notesCountText" class="status-num notes">...</span>
+        <span class="status-desc" data-i18n="cached_notes_count">自訂暱稱與備註</span>
+      </div>
     </div>
 
     <div class="status-card" style="text-align: left; padding-bottom: 6px">
@@ -224,7 +292,15 @@
           <option value="ja">日本語</option>
         </select>
       </div>
-      <hr style="border:0; border-top:1px dashed #ccc; margin: 5px 0;">
+      <div class="settings-row">
+        <span data-i18n="theme_select">外觀主題:</span>
+        <select id="themeSelect" class="settings-select">
+          <option value="system" data-i18n="theme_system">跟隨系統</option>
+          <option value="light" data-i18n="theme_light">淺色模式</option>
+          <option value="dark" data-i18n="theme_dark">暗黑模式</option>
+        </select>
+      </div>
+      <hr style="border: 0; border-top: 1px dashed #ccc; margin: 5px 0" />
 
       <div style="font-weight: bold; margin-bottom: 5px; font-size: 12px" data-i18n="preferences">
         偏好設定
@@ -242,17 +318,22 @@
 
       <div class="settings-row">
         <span data-i18n="del_days" data-i18n-title="del_days_title">刪除時間 (天):</span>
-        <input type="number" id="deleteDaysInput" class="settings-input" min="7" max="365" />
+        <input type="number" id="deleteDaysInput" class="settings-input" min="7" max="730" />
       </div>
 
       <div class="settings-row">
         <span data-i18n="dual_node" data-i18n-title="dual_node_title">雙節點替換:</span>
-        <input type="checkbox" id="dualNodeInput" />
+        <input type="checkbox" id="dualNodeInput" checked />
       </div>
 
       <div class="settings-row">
         <span data-i18n="click_copy" data-i18n-title="click_copy_title">點擊複製連結:</span>
         <input type="checkbox" id="clickToCopyInput" />
+      </div>
+
+      <div class="settings-row">
+        <span data-i18n="local_notes_toggle" data-i18n-title="local_notes_toggle_title">自訂暱稱與備註:</span>
+        <input type="checkbox" id="localNotesInput" checked />
       </div>
 
       <div class="settings-row">
@@ -273,39 +354,42 @@
       </button>
     </div>
 
-    <!-- 保險絲控制區塊 (預設隱藏) -->
     <div id="fuseContainer" class="fuse-container">
-      <!-- 後端保險絲 (爬蟲) -->
       <div id="fuseBackendCapsule" class="fuse-capsule normal" title="Loading...">
         <span class="fuse-icon">⚡</span>
         <span class="fuse-label" data-i18n="fuse_be_title">Backend</span>
       </div>
 
-      <!-- 前端保險絲 (UI) -->
       <div id="fuseFrontendCapsule" class="fuse-capsule normal" title="Loading...">
         <span class="fuse-icon">🖥️</span>
         <span class="fuse-label" data-i18n="fuse_fe_title">Frontend</span>
       </div>
     </div>
 
-    <button id="openViewersBtn" class="btn" data-i18n="open_viewers">🏷️ 觀眾筆記管理 (標籤、評分)</button>
-
     <button id="openManagerBtn" class="btn" data-i18n="open_manager">📋 開啟快取管理頁面</button>
 
-    <button id="openManualBtn" class="btn" data-i18n="manual" style="border-color: #bbdefb; color: #1565c0; background: #e3f2fd;">
+    <button
+      id="openManualBtn"
+      class="btn"
+      data-i18n="manual"
+      style="border-color: #bbdefb; color: #1565c0; background: #e3f2fd"
+    >
       📖 使用說明書
     </button>
 
     <div class="footer-container">
       <span id="openReadmeBtn" class="footer-link" data-i18n="about_log">📜 關於 & 修改紀錄</span>
-      <span style="margin: 0 5px; color: #ddd;">|</span>
-      <span id="openTwitterBtn" class="footer-link" style="color: #1da1f2;" data-i18n="report_issue">🐦 回報問題</span>
+      <span style="margin: 0 5px; color: #ddd">|</span>
+      <span id="openTwitterBtn" class="footer-link" style="color: #1da1f2" data-i18n="report_issue">
+        🐦 回報問題
+      </span>
     </div>
 
     <script src="../../js/shared/config.js"></script>
     <script src="../../js/shared/utils.js"></script>
     <script src="../../js/shared/locales.js"></script>
     <script src="../../js/shared/i18n.js"></script>
+    <script src="../../js/shared/theme.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

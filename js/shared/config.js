@@ -16,16 +16,25 @@ globalScope.AppConfig = {
   // 「點擊複製」功能的開關狀態鍵值
   CLICK_TO_COPY_KEY: "yt_realname_click_copy",
 
+  // 「自訂暱稱與備註」功能的開關狀態鍵值 (預設開啟)
+  LOCAL_NOTES_KEY: "yt_realname_local_notes",
+
   // 「抓取速度」模式的儲存鍵值 (NORMAL / SLOW)
   FETCH_SPEED_KEY: "yt_realname_fetch_speed",
 
   // 語言設定鍵值
   LANG_KEY: "yt_realname_lang",
 
+  // 外觀主題設定鍵值 ("system" | "light" | "dark")
+  THEME_KEY: "yt_realname_theme",
+
   // 拆分為兩個獨立的保險絲 Key，避免狀態寫入時發生 Race Condition
   // 儲存格式: { status: 'NORMAL' | 'TRIPPED', reason: string, timestamp: number }
   FUSE_FE_KEY: "yt_realname_fuse_frontend", // 前端保險絲 (控制 Scanner)
   FUSE_BE_KEY: "yt_realname_fuse_backend",  // 後端保險絲 (控制 Fetcher)
+
+  // 本機自訂暱稱與備註變更通知鍵值
+  NOTES_REV_KEY: "sm_viewer_notes_rev",
 
   // === 預設參數設定 ===
   // 名稱顯示的最大長度
@@ -64,9 +73,9 @@ globalScope.AppConfig = {
   },
 
   // 抓取速度控制 (Rate Limiting)
-  // 用途：設定每次爬蟲抓取後的延遲時間範圍（毫秒），以降低被 YouTube 偵測為機器人的風險。
+  // 用途：設定每次抓取的節流間隔（毫秒）與併發數；遇 429 或錯誤會自動降回單線程並指數退避。
   SPEED_PRESETS: {
-    NORMAL: { MIN: 1200, MAX: 2500 }, // 一般模式：隨機延遲 1.2 ~ 2.5 秒
-    SLOW: { MIN: 3500, MAX: 6000 }, // 安全模式：隨機延遲 3.5 ~ 6.0 秒 (適用於高風險情境)
+    NORMAL: { MIN: 350, MAX: 700, CONCURRENCY: 3 }, // 一般模式：3 併發 + 動態節流
+    SLOW: { MIN: 2000, MAX: 3500, CONCURRENCY: 1 }, // 安全模式：單線程慢速抓取 (高風險情境)
   },
-};
+};
