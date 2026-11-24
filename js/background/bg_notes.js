@@ -9,9 +9,11 @@ const ViewerNotesModel = {
   MAX_NOTE_LEN: 300,
   MAX_NOTES: 50,
 
+  // Lowercase, 2-61 characters, no spaces or , / ? # & (fixtures/handle_cases.json). Unlike typed input, a value
+  // without @ is not a handle here: on the page it is a display name, so it must never become a key.
   normalizeHandle: function (raw) {
     const s = String(raw || "").trim().toLowerCase();
-    return s.length > 1 && s[0] === "@" ? s : null;
+    return s.length >= 2 && s.length <= 61 && s[0] === "@" && !/[\s,/?#&]/.test(s) ? s : null;
   },
 
   normalizeChannelId: function (raw) {

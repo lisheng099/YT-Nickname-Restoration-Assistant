@@ -219,4 +219,4 @@ const DataBridge = {
     );
   },
 };
-DataBridge.init();
+DataBridge.init();

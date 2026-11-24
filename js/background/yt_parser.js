@@ -50,10 +50,29 @@ const YTParser = {
     let numericSubs = subs ? this.parseSubsString(subs) : 0;
     if (numericSubs < 500) numericSubs = 0; // 過濾 500 以下的訂閱數
 
-    return {
-      nameRaw: name,
-      subs: numericSubs,
-    };
+    const result = { nameRaw: name, subs: numericSubs };
+    const channelId = this.extractChannelId(jsonData, htmlText);
+    if (channelId) result.channelId = channelId;
+    return result;
+  },
+
+  CHANNEL_ID: /^UC[A-Za-z0-9_-]{22}$/,
+
+  // 頻道 ID (UC...)：與 handle 不同，頻道更名後仍維持不變
+  extractChannelId: function (jsonData, htmlText) {
+    const candidates = [
+      jsonData?.metadata?.channelMetadataRenderer?.externalId,
+      jsonData?.header?.c4TabbedHeaderRenderer?.channelId,
+      jsonData?.microformat?.microformatDataRenderer?.urlCanonical?.split("/channel/")[1],
+    ];
+    const m =
+      htmlText.match(/<link\s+rel="canonical"\s+href="[^"]*\/channel\/(UC[A-Za-z0-9_-]{22})"/i) ||
+      htmlText.match(/<meta\s+itemprop="(?:identifier|channelId)"\s+content="(UC[A-Za-z0-9_-]{22})"/i);
+    if (m) candidates.push(m[1]);
+    for (const id of candidates) {
+      if (typeof id === "string" && this.CHANNEL_ID.test(id)) return id;
+    }
+    return null;
   },
 
   // 以括號配對擷取 ytInitialData，字串內容含有 "};" 時也能完整取出
