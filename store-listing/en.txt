@@ -1,5 +1,3 @@
-This extension is inspired by 'YTid 名稱修復器'. Special thanks to 夜有風 for sharing!
-
 📺 YT Nickname Restorer
 
 📖 Introduction
@@ -54,7 +52,7 @@ How to use:
 4. Your custom nicknames and notes are exported and imported separately, from the "Nicknames & Notes" tab. Importing merges them with what you have: notes are combined and nothing is deleted.
 
 🤝 Why use Import?
-- Crowd-sourced "Regulars List": Veteran fans can share their accumulated list in Discord or fan groups so newcomers recognize regulars right away.
+- Crowd-sourced "Regulars List": Veteran fans can share their accumulated list in fan communities so newcomers recognize regulars right away.
 - Instant Display, No Waiting: Names already in your list appear immediately even in busy live chats.
 - Safe Import: Choose "Safe Import (Mark Expired)" to mark imported entries as expired; they display right away and are re-checked in the background when they appear on screen.
 
@@ -68,6 +66,3 @@ A: Looking up many new names in a short time may get temporarily limited by YouT
 
 Q3: Will my nicknames, notes, or browsing data be uploaded?
 A: Never. The extension only contacts YouTube to look up channel names; your cache, nicknames, and notes stay in your browser. Exported JSON files are saved only to your own computer.
-
-Q4: Can I use it together with the StreamMemo creator extension?
-A: Please don't enable both in the same browser profile; both rewrite chat names and would conflict.
