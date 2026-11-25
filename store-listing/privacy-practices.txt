@@ -1,0 +1,41 @@
+Chrome Web Store 後台「隱私權實務 (Privacy practices)」分頁要填的內容。
+英文段落直接貼到對應欄位；中文為對照說明，不用貼。
+內容依 manifest.json：permissions = storage；host_permissions = https://www.youtube.com/*、https://studio.youtube.com/*。
+
+==================================================
+單一用途說明 (Single purpose description)
+==================================================
+Restores YouTube @handles to the channels' display names in live chat, comments and YouTube Studio, and lets the user keep private custom nicknames and notes for chatters, stored only in the browser.
+
+（中文：在 YouTube 直播聊天室、留言區與 YouTube Studio 把 @handle 還原為頻道顯示名稱，並讓使用者為聊天室觀眾保存只存在瀏覽器裡的自訂暱稱與備註。）
+
+==================================================
+storage 權限理由 (storage justification)
+==================================================
+Saves the user's settings (language, theme, name length, cache days, fetch speed, feature toggles) and the extension's on/off status in chrome.storage.local. Nothing is synced or sent anywhere.
+
+（中文：用 chrome.storage.local 保存使用者設定與擴充功能的暫停／啟用狀態，不同步、不外傳。頻道名稱快取與自訂暱稱／備註存在擴充功能自己的 IndexedDB。）
+
+==================================================
+主機權限理由 (Host permission justification)
+==================================================
+www.youtube.com and studio.youtube.com: the content scripts find @handles in live chat, comments and YouTube Studio and replace them with channel names, and show the custom-nickname/notes panel when the user clicks a chatter's avatar. The background script requests the public channel page https://www.youtube.com/@handle (without cookies) to read the channel's display name and subscriber count. No other sites are accessed.
+
+（中文：在 YouTube 與 YouTube Studio 頁面辨識並替換 @handle、在點擊頭像時顯示暱稱／備註面板；背景程式以不帶 Cookie 的方式讀取公開頻道頁面 https://www.youtube.com/@handle 取得頻道名稱與訂閱數。不存取其他網站。）
+
+==================================================
+遠端程式碼 (Are you using remote code?)
+==================================================
+選「No, I am not using remote code」。
+All JavaScript is packaged in the extension; no external scripts are loaded or evaluated.
+
+==================================================
+資料使用 (Data usage)
+==================================================
+「What user data do you plan to collect from users now or in the future?」：全部不勾。
+理由：開發者不收集任何資料。頁面內容與使用者輸入的暱稱／備註只在使用者自己的瀏覽器中處理與保存，不會傳到開發者或第三方；唯一的網路請求是向 YouTube 查詢公開頻道頁面。
+
+下方三項聲明全部勾選：
+- I do not sell or transfer user data to third parties, outside of the approved use cases
+- I do not use or transfer user data for purposes that are unrelated to my item's single purpose
+- I do not use or transfer user data to determine creditworthiness or for lending purposes
