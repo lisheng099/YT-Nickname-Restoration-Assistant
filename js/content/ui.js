@@ -586,26 +586,65 @@ const TooltipManager = {
     }
   },
 
+  // 額外的懸停資訊來源 (例如聊天室名稱的本機暱稱與備註)：回傳 info 物件即由它決定提示內容，回傳 null 則交給下一個
+  hoverProviders: [],
+
+  addHoverProvider: function (fn) {
+    if (typeof fn !== "function") return;
+    this.init();
+    this.hoverProviders.push(fn);
+  },
+
+  hide: function () {
+    if (this.tooltipEl && this.tooltipEl.style.opacity !== "0") {
+      this.tooltipEl.style.opacity = "0";
+      this.tooltipEl.style.transform = "translateY(5px)";
+    }
+  },
+
   handleMouseMove: function (e) {
-    const target = e.target.closest('[data-rn-bound="true"]');
-    if (!target) {
-      if (this.tooltipEl && this.tooltipEl.style.opacity !== "0") {
-        this.tooltipEl.style.opacity = "0";
-        this.tooltipEl.style.transform = "translateY(5px)";
+    for (const provider of this.hoverProviders) {
+      let info = null;
+      try {
+        info = provider(e);
+      } catch {
+        info = null;
       }
+      if (info) {
+        this.showInfo(e, info);
+        return;
+      }
+    }
+    const target = e.target && e.target.closest ? e.target.closest('[data-rn-bound="true"]') : null;
+    if (!target) {
+      this.hide();
       return;
     }
     this.show(e, target);
   },
 
   show: function (e, target) {
+    this.showInfo(e, {
+      name: target.dataset.rnName || I18n.t("loading"),
+      handle: target.dataset.rnHandle || "",
+      subs: parseInt(target.dataset.rnSubs || "0"),
+      isExpired: target.dataset.rnExpired === "true",
+    });
+  },
+
+  /**
+   * info: { name, handle, subs, isExpired, original?, member?, notes?, hint? }
+   * original：顯示自訂暱稱時的原頻道名稱；member：會員徽章文字 (例如「會員 (6 個月)」)；
+   * notes：本機備註 (最多顯示 3 則)；hint：底部的操作提示。
+   */
+  showInfo: function (e, info) {
     if (!this.tooltipEl) this.createTooltipElement();
     this.updateTheme();
 
-    const name = target.dataset.rnName || I18n.t("loading");
-    const handle = target.dataset.rnHandle || "";
-    const subs = parseInt(target.dataset.rnSubs || "0");
-    const isExpired = target.dataset.rnExpired === "true";
+    const name = info.name || I18n.t("loading");
+    const handle = info.handle || "";
+    const subs = parseInt(info.subs || 0) || 0;
+    const isExpired = !!info.isExpired;
 
     this.tooltipEl.replaceChildren();
 
@@ -617,6 +656,13 @@ const TooltipManager = {
     });
     nameDiv.textContent = name;
     this.tooltipEl.appendChild(nameDiv);
+
+    if (info.original) {
+      const origDiv = document.createElement("div");
+      Object.assign(origDiv.style, { fontSize: "0.9em", opacity: "0.85" });
+      origDiv.textContent = I18n.t("tooltip_original_name", { name: info.original });
+      this.tooltipEl.appendChild(origDiv);
+    }
 
     if (handle) {
       const handleDiv = document.createElement("div");
@@ -630,9 +676,9 @@ const TooltipManager = {
       this.tooltipEl.appendChild(handleDiv);
     }
 
-    if (subs > 0) {
-      const subsDiv = document.createElement("div");
-      Object.assign(subsDiv.style, {
+    const addLine = (icon, text) => {
+      const div = document.createElement("div");
+      Object.assign(div.style, {
         marginTop: "6px",
         fontSize: "0.85em",
         display: "flex",
@@ -640,12 +686,45 @@ const TooltipManager = {
         gap: "4px",
       });
       const iconSpan = document.createElement("span");
-      iconSpan.textContent = "👥";
+      iconSpan.textContent = icon;
       const textSpan = document.createElement("span");
-      textSpan.textContent = I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) });
-      subsDiv.appendChild(iconSpan);
-      subsDiv.appendChild(textSpan);
-      this.tooltipEl.appendChild(subsDiv);
+      textSpan.textContent = text;
+      div.append(iconSpan, textSpan);
+      this.tooltipEl.appendChild(div);
+    };
+
+    if (subs > 0) {
+      addLine("👥", I18n.t("subs_count", { count: new Intl.NumberFormat().format(subs) }));
+    }
+    if (info.member) {
+      addLine("🎖️", info.member);
+    }
+
+    const notes = Array.isArray(info.notes) ? info.notes.filter(Boolean) : [];
+    if (notes.length > 0) {
+      const box = document.createElement("div");
+      Object.assign(box.style, {
+        marginTop: "6px",
+        paddingTop: "4px",
+        borderTop: "1px dashed rgba(128,128,128,0.3)",
+        fontSize: "0.85em",
+      });
+      const head = document.createElement("div");
+      head.style.fontWeight = "600";
+      head.textContent = "📝 " + I18n.t("local_notes_title");
+      box.appendChild(head);
+      notes.slice(0, 3).forEach((n) => {
+        const line = document.createElement("div");
+        line.textContent = "• " + (n.length > 80 ? n.slice(0, 80) + "…" : n);
+        box.appendChild(line);
+      });
+      if (notes.length > 3) {
+        const more = document.createElement("div");
+        more.style.opacity = "0.7";
+        more.textContent = I18n.t("tooltip_more_notes", { count: notes.length - 3 });
+        box.appendChild(more);
+      }
+      this.tooltipEl.appendChild(box);
     }
 
     if (isExpired) {
@@ -659,6 +738,13 @@ const TooltipManager = {
       });
       expDiv.textContent = I18n.t("data_expired");
       this.tooltipEl.appendChild(expDiv);
+    }
+
+    if (info.hint) {
+      const hintDiv = document.createElement("div");
+      Object.assign(hintDiv.style, { marginTop: "6px", fontSize: "0.8em", opacity: "0.65" });
+      hintDiv.textContent = info.hint;
+      this.tooltipEl.appendChild(hintDiv);
     }
 
     const rect = this.tooltipEl.getBoundingClientRect();

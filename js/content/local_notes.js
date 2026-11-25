@@ -1,8 +1,8 @@
 // ===========================================================
 // local_notes.js - 觀眾版本機自訂暱稱與備註面板 (100% 本機運作)
-// 用途：在 YouTube 聊天室點擊頭像即可為觀眾設定自訂暱稱（直接替換顯示名稱）
-//       與備註，資料僅存於本機瀏覽器，不上傳至任何伺服器。
-//       可於擴充功能彈出視窗開關（預設開啟）。
+// 用途：在 YouTube 聊天室只佔用「名稱」：滑鼠移到名稱顯示原名稱、訂閱數、會員月份與備註，
+//       點擊名稱開啟自訂暱稱（直接替換顯示名稱）與備註的編輯視窗；頭像維持 YouTube 原本的行為。
+//       資料僅存於本機瀏覽器，不上傳至任何伺服器。可於擴充功能彈出視窗開關（預設開啟）。
 // ===========================================================
 
 (function () {
@@ -21,12 +21,18 @@
   const PANEL_ID = "sm-local-notes-panel";
   const NICK_CLASS = "sm-local-nick-name";
   const CUSTOM_ATTR = "data-sm-custom";
+  const EDITABLE_ATTR = "data-sm-editable";
+  const NOTE_MARK_CLASS = "sm-local-note-mark";
+  const DUAL_CLASS = "rn-restored-name";
+  // 編輯視窗第一次出現時在底部說明「之後在哪裡開啟 / 關閉」，看過一次就不再顯示
+  const INTRO_SEEN_KEY = "sm_viewer_notes_intro_seen";
 
   const cache = new Map(); // lookupKey -> record | null
   let isEnabled = true;
   let activePanel = null;
   let pendingHosts = new Set();
   let scanTimer = null;
+  let introSeen = true; // 讀到 storage 之前先當作看過，避免重複顯示
 
   function ensureStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -43,17 +49,25 @@
         margin-right: 4px;
         vertical-align: baseline;
       }
-      #author-photo[data-sm-editable="1"] {
+      [${EDITABLE_ATTR}="1"] #author-name,
+      [${EDITABLE_ATTR}="1"] .${DUAL_CLASS},
+      [${EDITABLE_ATTR}="1"] .${NICK_CLASS} {
         cursor: pointer;
-        border-radius: 50%;
       }
-      #author-photo[data-sm-editable="1"]:hover {
-        outline: 2px solid #3ea6ff;
-        outline-offset: 1px;
+      [${EDITABLE_ATTR}="1"] #author-name:hover,
+      [${EDITABLE_ATTR}="1"] .${DUAL_CLASS}:hover,
+      [${EDITABLE_ATTR}="1"] .${NICK_CLASS}:hover {
+        text-decoration: underline dotted;
+        text-underline-offset: 2px;
       }
-      #author-photo[data-sm-has-note="1"] {
-        box-shadow: 0 0 0 2px #f59e0b;
-        border-radius: 50%;
+      .${NOTE_MARK_CLASS} {
+        display: inline-block;
+        margin: 0 4px 0 2px;
+        font-size: 10px;
+        line-height: 1;
+        opacity: 0.85;
+        vertical-align: middle;
+        pointer-events: none;
       }
       #${PANEL_ID} {
         position: fixed;
@@ -165,6 +179,51 @@
         opacity: 0.65;
         margin: 4px 0 0;
       }
+      #${PANEL_ID} .sm-ln-tools {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      #${PANEL_ID} .sm-ln-icon {
+        border: none;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 13px;
+        padding: 0 4px;
+        opacity: 0.75;
+      }
+      #${PANEL_ID} .sm-ln-icon:hover {
+        opacity: 1;
+      }
+      #${PANEL_ID} .sm-ln-intro {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+      #${PANEL_ID} .sm-ln-intro p {
+        margin: 0 0 8px;
+        opacity: 0.85;
+      }
+      #${PANEL_ID} .sm-ln-intro-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      #${PANEL_ID} button.sm-ln-btn-ghost {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 6px;
+        border: 1px solid #cbd5e1;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
     `;
     (document.head || document.documentElement).appendChild(style);
   }
@@ -204,7 +263,52 @@
       channelId ||
       "";
     const subs = Number((dual && dual.dataset.rnSubs) || (author && author.dataset.rnSubs) || 0) || 0;
-    return { channelId, handle, displayName, subs, author };
+    const isExpired = !!((dual && dual.dataset.rnExpired === "true") || (author && author.dataset.rnExpired === "true"));
+    return { channelId, handle, displayName, subs, isExpired, author };
+  }
+
+  /** 會員徽章的文字 (YouTube 原生的提示，例如「會員 (6 個月)」「New member」)；不是會員時為空字串。 */
+  function memberLabel(host) {
+    const badges = host.querySelectorAll("yt-live-chat-author-badge-renderer");
+    for (const b of badges) {
+      if ((b.getAttribute("type") || "").toLowerCase() !== "member") continue;
+      const img = b.querySelector("img");
+      const label = (b.getAttribute("aria-label") || (img && img.getAttribute("alt")) || "").trim();
+      if (label) return label;
+    }
+    return "";
+  }
+
+  /**
+   * 事件路徑上的「名稱」元素 (原生 #author-name、還原後的名稱、自訂暱稱) 與所屬的聊天訊息；
+   * 留言內文裡的 @提及 不算，避免點到別人的名字卻開啟留言者的視窗。
+   */
+  function findNameTarget(e) {
+    const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+    const nodes = path.length ? path : [];
+    if (!nodes.length) {
+      let n = e.target;
+      while (n) {
+        nodes.push(n);
+        n = n.parentNode;
+      }
+    }
+    for (const node of nodes) {
+      if (!node || node.nodeType !== 1) continue;
+      if (node.matches && node.matches(HOST_SELECTOR)) return null;
+      const isName =
+        node.id === "author-name" ||
+        (node.classList && (node.classList.contains(NICK_CLASS) || node.classList.contains(DUAL_CLASS)));
+      if (!isName) continue;
+      if (node.closest("#message")) return null;
+      const parent = node.parentNode;
+      if (node.id !== "author-name" && !(parent && parent.querySelector && parent.querySelector(":scope > #author-name"))) {
+        return null;
+      }
+      const host = node.closest(HOST_SELECTOR);
+      return host ? { host, nameEl: node } : null;
+    }
+    return null;
   }
 
   function cacheKey(id) {
@@ -216,12 +320,10 @@
     document.querySelectorAll(`[${CUSTOM_ATTR}]`).forEach((host) => {
       host.removeAttribute(CUSTOM_ATTR);
     });
-    document.querySelectorAll(`.${NICK_CLASS}`).forEach((el) => el.remove());
-    document.querySelectorAll("#author-photo[data-sm-editable]").forEach((avatar) => {
-      delete avatar.dataset.smEditable;
-      delete avatar.dataset.smHasNote;
-      avatar.removeAttribute("title");
+    document.querySelectorAll(`[${EDITABLE_ATTR}]`).forEach((host) => {
+      host.removeAttribute(EDITABLE_ATTR);
     });
+    document.querySelectorAll(`.${NICK_CLASS}, .${NOTE_MARK_CLASS}`).forEach((el) => el.remove());
   }
 
   function renderHost(host, record) {
@@ -230,18 +332,18 @@
     if (!author || !author.parentNode) return;
 
     let nickEl = author.parentNode.querySelector(`:scope > .${NICK_CLASS}`);
-    const avatar = host.querySelector("#author-photo");
+    let markEl = author.parentNode.querySelector(`:scope > .${NOTE_MARK_CLASS}`);
 
     if (!isEnabled) {
       host.removeAttribute(CUSTOM_ATTR);
+      host.removeAttribute(EDITABLE_ATTR);
       if (nickEl) nickEl.remove();
-      if (avatar) {
-        delete avatar.dataset.smEditable;
-        delete avatar.dataset.smHasNote;
-        avatar.removeAttribute("title");
-      }
+      if (markEl) markEl.remove();
       return;
     }
+
+    // 只佔用名稱：名稱可點擊開啟編輯視窗，滑鼠移上顯示資訊 (見 hoverInfo)
+    host.setAttribute(EDITABLE_ATTR, "1");
 
     // Custom nickname replaces the displayed author name while preserving native color/style
     const nick = record && record.customNickname ? record.customNickname : "";
@@ -252,34 +354,72 @@
         author.insertAdjacentElement("afterend", nickEl);
       }
       nickEl.textContent = nick;
-      if (typeof TooltipManager !== "undefined") {
-        TooltipManager.copyNativeStyle(author, nickEl);
-        const orig = id.displayName && id.displayName !== nick ? id.displayName : "";
-        TooltipManager.attachData(
-          nickEl,
-          id.handle || "",
-          orig ? `${nick} (${orig})` : nick,
-          id.subs,
-          false
-        );
-      } else {
-        nickEl.title = id.displayName ? `${nick} (${id.displayName})` : nick;
-      }
+      if (typeof TooltipManager !== "undefined") TooltipManager.copyNativeStyle(author, nickEl);
       host.setAttribute(CUSTOM_ATTR, "1");
     } else {
       host.removeAttribute(CUSTOM_ATTR);
       if (nickEl) nickEl.remove();
+      nickEl = null;
     }
 
-    // Avatar click target & note preview tooltip
-    if (avatar) {
-      const notes = record && Array.isArray(record.notes) ? record.notes : [];
-      avatar.dataset.smEditable = "1";
-      avatar.dataset.smHasNote = notes.length > 0 ? "1" : "0";
-      avatar.title =
-        notes.length > 0
-          ? `${I18n.t("local_notes_title") || "備註"}：\n${notes.join("\n")}`
-          : I18n.t("local_edit_hint") || "設定自訂暱稱與備註";
+    // 有備註時在名稱後方放一個小記號 (不佔用頭像)
+    const notes = record && Array.isArray(record.notes) ? record.notes : [];
+    if (notes.length > 0) {
+      if (!markEl) {
+        markEl = document.createElement("span");
+        markEl.className = NOTE_MARK_CLASS;
+        markEl.textContent = "📝";
+        markEl.setAttribute("aria-hidden", "true");
+      }
+      (nickEl || author).insertAdjacentElement("afterend", markEl);
+    } else if (markEl) {
+      markEl.remove();
+    }
+  }
+
+  /** 滑鼠移到名稱上時的提示內容：原名稱、handle、訂閱數、會員月份、備註。 */
+  function hoverInfo(e) {
+    if (!isEnabled) return null;
+    const target = findNameTarget(e);
+    if (!target) return null;
+    const id = extractIdentity(target.host);
+    const key = cacheKey(id);
+    const record = key ? cache.get(key) || null : null;
+    const nick = record && record.customNickname ? record.customNickname : "";
+    const original = id.displayName && id.displayName !== id.handle ? id.displayName : "";
+    return {
+      name: nick || original || id.handle || id.channelId || "",
+      original: nick && original && original !== nick ? original : "",
+      handle: id.handle || "",
+      subs: id.subs,
+      isExpired: id.isExpired,
+      member: memberLabel(target.host),
+      notes: record && Array.isArray(record.notes) ? record.notes : [],
+      hint: key ? I18n.t("local_click_name_hint") : "",
+    };
+  }
+
+  function channelUrl(id) {
+    if (id.handle) return `https://www.youtube.com/${id.handle}`;
+    if (id.channelId) return `https://www.youtube.com/channel/${id.channelId}`;
+    return "";
+  }
+
+  function markIntroSeen() {
+    introSeen = true;
+    try {
+      chrome.storage.local.set({ [INTRO_SEEN_KEY]: Date.now() });
+    } catch {
+      // storage 無法使用時只在這次頁面內記得
+    }
+  }
+
+  function setFeatureEnabled(on) {
+    const localNotesKey = (window.AppConfig && window.AppConfig.LOCAL_NOTES_KEY) || "yt_realname_local_notes";
+    try {
+      chrome.storage.local.set({ [localNotesKey]: on });
+    } catch {
+      // ignore
     }
   }
 
@@ -319,12 +459,43 @@
     const title = document.createElement("span");
     title.className = "sm-ln-title";
     title.textContent = id.displayName || key;
+    const tools = document.createElement("span");
+    tools.className = "sm-ln-tools";
+    const url = channelUrl(id);
+    if (url) {
+      // 聊天室的名稱改成開啟這個視窗，「點擊複製連結」改由這裡提供
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "sm-ln-icon sm-ln-copy";
+      copyBtn.textContent = "🔗";
+      copyBtn.title = I18n.t("copy_link") || "複製頻道連結";
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          if (typeof TooltipManager !== "undefined") TooltipManager.showToast(I18n.t("copied"));
+        } catch {
+          // clipboard 被拒絕時不做事
+        }
+      });
+      tools.appendChild(copyBtn);
+    }
+    const managerBtn = document.createElement("button");
+    managerBtn.type = "button";
+    managerBtn.className = "sm-ln-icon sm-ln-manager";
+    managerBtn.textContent = "📋";
+    managerBtn.title = I18n.t("local_open_manager") || "在觀眾資料頁查看";
+    managerBtn.addEventListener("click", () => {
+      send({ type: "OPEN_MANAGER", query: id.handle || id.channelId || "" });
+    });
+    tools.appendChild(managerBtn);
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "sm-ln-close";
     closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", I18n.t("notes_close") || "關閉");
     closeBtn.addEventListener("click", closePanel);
-    head.append(title, closeBtn);
+    tools.appendChild(closeBtn);
+    head.append(title, tools);
 
     const nickLabel = document.createElement("label");
     nickLabel.textContent = I18n.t("local_custom_nickname") || "自訂暱稱";
@@ -435,6 +606,34 @@
 
     renderList();
     panel.append(head, nickLabel, nickRow, notesLabel, noteRow, listEl);
+
+    // 第一次開啟：底部說明之後在哪裡開啟 / 關閉，並提供關閉按鈕；看過就記錄下來
+    if (!introSeen) {
+      const intro = document.createElement("div");
+      intro.className = "sm-ln-intro";
+      const text = document.createElement("p");
+      text.textContent = I18n.t("local_intro_text");
+      const actions = document.createElement("div");
+      actions.className = "sm-ln-intro-actions";
+      const disableBtn = document.createElement("button");
+      disableBtn.type = "button";
+      disableBtn.className = "sm-ln-btn-ghost sm-ln-disable";
+      disableBtn.textContent = I18n.t("local_intro_disable") || "關閉此功能";
+      disableBtn.addEventListener("click", () => {
+        closePanel();
+        setFeatureEnabled(false);
+      });
+      const okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.className = "sm-ln-btn sm-ln-intro-close";
+      okBtn.textContent = I18n.t("notes_close") || "關閉";
+      okBtn.addEventListener("click", closePanel);
+      actions.append(disableBtn, okBtn);
+      intro.append(text, actions);
+      panel.appendChild(intro);
+      markIntroSeen();
+    }
+
     document.body.appendChild(panel);
     activePanel = panel;
 
@@ -513,37 +712,24 @@
     const localNotesKey = (window.AppConfig && window.AppConfig.LOCAL_NOTES_KEY) || "yt_realname_local_notes";
     const notesRevKey = (window.AppConfig && window.AppConfig.NOTES_REV_KEY) || "sm_viewer_notes_rev";
 
-    function findAvatarFromEvent(e) {
-      if (typeof e.composedPath === "function") {
-        for (const node of e.composedPath()) {
-          if (node && node.nodeType === 1 && node.id === "author-photo") {
-            return node;
-          }
-        }
+    // 點擊名稱開啟編輯視窗 (捕獲階段，先於 YouTube 與「點擊複製連結」處理)；頭像不再攔截
+    function handleNameClick(e) {
+      if (activePanel && e.target && !activePanel.contains(e.target)) {
+        const t = findNameTarget(e);
+        if (!t) closePanel();
       }
-      if (e.target && e.target.closest) {
-        return e.target.closest("#author-photo");
-      }
-      return null;
-    }
-
-    function handleAvatarActivate(e) {
-      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-      const avatar = findAvatarFromEvent(e);
-      if (activePanel && !activePanel.contains(e.target) && !avatar) {
-        if (e.type === "click") closePanel();
-      }
-      if (!isEnabled || !avatar) return;
-      const host = avatar.closest && avatar.closest(HOST_SELECTOR);
-      if (!host) return;
+      if (!isEnabled) return;
+      const target = findNameTarget(e);
+      if (!target) return;
       e.preventDefault();
       e.stopPropagation();
       if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
-      openPanel(host, avatar);
+      if (typeof TooltipManager !== "undefined") TooltipManager.hide();
+      openPanel(target.host, target.nameEl);
     }
 
-    document.addEventListener("click", handleAvatarActivate, true);
-    document.addEventListener("keydown", handleAvatarActivate, true);
+    document.addEventListener("click", handleNameClick, true);
+    if (typeof TooltipManager !== "undefined") TooltipManager.addHoverProvider(hoverInfo);
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closePanel();
@@ -589,8 +775,9 @@
     }
 
     if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get(localNotesKey, (res) => {
+      chrome.storage.local.get([localNotesKey, INTRO_SEEN_KEY], (res) => {
         isEnabled = !res || res[localNotesKey] !== false;
+        introSeen = !!(res && res[INTRO_SEEN_KEY]);
         if (isEnabled) scanAll();
       });
     } else {

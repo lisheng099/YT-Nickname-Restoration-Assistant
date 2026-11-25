@@ -62,6 +62,7 @@ const DataManager = {
           handle: handle, // 為了相容性，多加這個 key
           name: name,
           subs: data.subs || 0,
+          cid: data.cid || null, // 頻道 ID：有取得時才有，用來對上自訂暱稱與備註
           ts: ts,
           isExpired: isExpired, // [新欄位]
           daysUntilDelete: daysUntilDelete, // [新欄位]

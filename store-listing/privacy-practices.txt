@@ -19,9 +19,9 @@ Saves the user's settings (language, theme, name length, cache days, fetch speed
 ==================================================
 主機權限理由 (Host permission justification)
 ==================================================
-www.youtube.com and studio.youtube.com: the content scripts find @handles in live chat, comments and YouTube Studio and replace them with channel names, and show the custom-nickname/notes panel when the user clicks a chatter's avatar. The background script requests the public channel page https://www.youtube.com/@handle (without cookies) to read the channel's display name and subscriber count. No other sites are accessed.
+www.youtube.com and studio.youtube.com: the content scripts find @handles in live chat, comments and YouTube Studio and replace them with channel names, and show the custom-nickname/notes window when the user clicks a chatter's name. The background script requests the public channel page https://www.youtube.com/@handle (without cookies) to read the channel's display name and subscriber count. No other sites are accessed.
 
-（中文：在 YouTube 與 YouTube Studio 頁面辨識並替換 @handle、在點擊頭像時顯示暱稱／備註面板；背景程式以不帶 Cookie 的方式讀取公開頻道頁面 https://www.youtube.com/@handle 取得頻道名稱與訂閱數。不存取其他網站。）
+（中文：在 YouTube 與 YouTube Studio 頁面辨識並替換 @handle、在點擊觀眾名稱時顯示暱稱／備註視窗；背景程式以不帶 Cookie 的方式讀取公開頻道頁面 https://www.youtube.com/@handle 取得頻道名稱與訂閱數。不存取其他網站。）
 
 ==================================================
 遠端程式碼 (Are you using remote code?)

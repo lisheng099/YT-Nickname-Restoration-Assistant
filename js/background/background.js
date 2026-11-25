@@ -90,6 +90,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "OPEN_MANAGER") {
+    // 聊天室編輯視窗的「在觀眾資料頁查看」：開啟後台並帶入搜尋字
+    const q = typeof request.query === "string" ? request.query.slice(0, 80) : "";
+    const url = chrome.runtime.getURL("pages/manager/manager.html") + (q ? `?q=${encodeURIComponent(q)}` : "");
+    chrome.tabs.create({ url });
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (request.type === "NOTES_IMPORT") {
     BgNotes.importRecords(request.records).then((res) => sendResponse(res));
     return true;
