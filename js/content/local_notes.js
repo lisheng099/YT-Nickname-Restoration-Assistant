@@ -332,7 +332,7 @@
     nickRow.className = "sm-ln-row";
     const nickInput = document.createElement("input");
     nickInput.type = "text";
-    nickInput.maxLength = 50;
+    nickInput.maxLength = NotesCore.LIMITS.NICKNAME;
     nickInput.value = (record && record.customNickname) || "";
     nickInput.placeholder = I18n.t("local_nick_placeholder") || "輸入自訂暱稱（留空清除）";
     const nickSave = document.createElement("button");
@@ -347,7 +347,7 @@
     noteRow.className = "sm-ln-row";
     const noteInput = document.createElement("input");
     noteInput.type = "text";
-    noteInput.maxLength = 300;
+    noteInput.maxLength = NotesCore.LIMITS.NOTE;
     noteInput.placeholder = I18n.t("local_note_placeholder") || "新增一則本機備註…";
     const noteAdd = document.createElement("button");
     noteAdd.type = "button";
