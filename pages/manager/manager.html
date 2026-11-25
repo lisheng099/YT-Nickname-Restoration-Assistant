@@ -246,6 +246,10 @@
       .btn-cancel { border: none; background: transparent; color: #888; text-decoration: underline; margin-top: 5px; }
       .btn-cancel:hover { color: #555; }
 
+      .edit-identity { margin-bottom: 8px; word-break: break-all; }
+      .edit-identity-name { font-weight: 600; color: #333; font-size: 13.5px; margin-bottom: 2px; }
+      .edit-identity-id { font-family: monospace; font-size: 12px; line-height: 1.5; }
+      html[data-theme="dark"] .edit-identity-name { color: #e2e8f0; }
       .edit-label { display: block; font-size: 12px; font-weight: 600; color: #555; margin: 10px 0 4px; }
       .edit-row { display: flex; gap: 6px; }
       .edit-input {
@@ -472,7 +476,7 @@
     <div id="noteEditModal" class="modal-overlay">
       <div class="modal-content left">
         <div class="modal-title" id="editModalTitle" data-i18n="notes_edit_title">編輯自訂暱稱與備註</div>
-        <div id="editNoteIdentity" class="stats" style="font-family: monospace; margin-bottom: 8px"></div>
+        <div id="editNoteIdentity" class="stats edit-identity"></div>
 
         <div id="addIdentityBox" style="display: none">
           <label class="edit-label" for="addIdentityInput" data-i18n="people_add_identity">@handle、頻道 ID 或頻道網址</label>

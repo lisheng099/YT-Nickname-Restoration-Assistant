@@ -365,11 +365,6 @@ function updatePaginationUI(totalPages, totalItems) {
 
 // ==================== 編輯 / 新增視窗 ====================
 
-function identityText(identity) {
-  if (!identity) return "";
-  return [identity.handle, identity.channelId].filter(Boolean).join(" / ");
-}
-
 function openEditModal(row) {
   addMode = false;
   const identity = { channelId: row.channelId || null, handle: row.handle || null };
@@ -402,10 +397,23 @@ function showEditModal() {
 }
 
 function refreshEditHeader() {
-  const idText = identityText(editing && editing.identity);
-  els.editNoteIdentity.textContent = editing && editing.label && editing.label !== idText
-    ? `${editing.label}  ·  ${idText}`
-    : idText;
+  // 頻道名稱一行，@handle 與頻道 ID 各自一行
+  const box = els.editNoteIdentity;
+  box.replaceChildren();
+  const identity = editing && editing.identity;
+  const ids = identity ? [identity.handle, identity.channelId].filter(Boolean) : [];
+  if (editing && editing.label && !ids.includes(editing.label)) {
+    const nameDiv = document.createElement("div");
+    nameDiv.className = "edit-identity-name";
+    nameDiv.textContent = editing.label;
+    box.appendChild(nameDiv);
+  }
+  for (const id of ids) {
+    const idDiv = document.createElement("div");
+    idDiv.className = "edit-identity-id";
+    idDiv.textContent = id;
+    box.appendChild(idDiv);
+  }
   els.editNoteDeleteBtn.style.display = editing && editing.record ? "" : "none";
 }
 
