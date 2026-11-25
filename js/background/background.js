@@ -11,6 +11,7 @@ try {
     "yt_parser.js",
     "bg_cache.js",
     "bg_fetcher.js",
+    "../shared/notes_core.js",
     "bg_notes.js"
   );
 } catch (e) {

@@ -1,10 +1,16 @@
 // ===========================================================
 // bg_notes.js - 本機自訂暱稱與備註儲存 (100% 本機 IndexedDB)
 // 用途：完全在瀏覽器本機保存使用者設定的自訂暱稱與備註，不上傳至任何伺服器。
+// 說明：主鍵規則、索引、字串清理與寫入流程來自共用的 notes_core.js (與主播版相同)；
+//       這裡只留觀眾版的欄位 (暱稱、備註) 與合併規則。
 // ===========================================================
 
+// background.js 以 importScripts 先載入 ../shared/notes_core.js；Node 測試則在這裡 require
+const NotesCoreRef =
+  typeof NotesCore !== "undefined" ? NotesCore : typeof require !== "undefined" ? require("../shared/notes_core.js") : null;
+
 const ViewerNotesModel = {
-  CHANNEL_ID: /^UC[A-Za-z0-9_-]{22}$/,
+  CHANNEL_ID: NotesCoreRef.CHANNEL_ID,
   MAX_NICK_LEN: 50,
   MAX_NOTE_LEN: 300,
   MAX_NOTES: 50,
@@ -13,12 +19,11 @@ const ViewerNotesModel = {
   // without @ is not a handle here: on the page it is a display name, so it must never become a key.
   normalizeHandle: function (raw) {
     const s = String(raw || "").trim().toLowerCase();
-    return s.length >= 2 && s.length <= 61 && s[0] === "@" && !/[\s,/?#&]/.test(s) ? s : null;
+    return NotesCoreRef.isHandleShape(s) ? s : null;
   },
 
   normalizeChannelId: function (raw) {
-    const s = String(raw || "").trim();
-    return this.CHANNEL_ID.test(s) ? s : null;
+    return NotesCoreRef.channelIdOf(String(raw || "").trim());
   },
 
   normalizeIdentity: function (identity) {
@@ -30,26 +35,15 @@ const ViewerNotesModel = {
   },
 
   cleanNick: function (raw) {
-    return typeof raw === "string" ? raw.trim().slice(0, this.MAX_NICK_LEN) : "";
+    return NotesCoreRef.cleanText(raw, this.MAX_NICK_LEN);
   },
 
   cleanNote: function (raw) {
-    return typeof raw === "string" ? raw.trim().slice(0, this.MAX_NOTE_LEN) : "";
+    return NotesCoreRef.cleanText(raw, this.MAX_NOTE_LEN);
   },
 
   cleanNotes: function (list) {
-    if (!Array.isArray(list)) return [];
-    const out = [];
-    const seen = new Set();
-    for (const item of list) {
-      const text = this.cleanNote(item);
-      if (text && !seen.has(text)) {
-        seen.add(text);
-        out.push(text);
-        if (out.length >= this.MAX_NOTES) break;
-      }
-    }
-    return out;
+    return NotesCoreRef.uniqueTexts(list, this.MAX_NOTE_LEN, this.MAX_NOTES);
   },
 
   /**
@@ -72,31 +66,19 @@ const ViewerNotesModel = {
   },
 
   createIndex: function () {
-    const byKey = new Map();
-    const handleToKey = new Map();
-
-    const indexRecord = (rec) => {
-      byKey.set(rec.key, rec);
-      if (rec.handle) handleToKey.set(rec.handle, rec.key);
-    };
-
-    const unindexRecord = (rec) => {
-      if (!rec) return;
-      byKey.delete(rec.key);
-      if (rec.handle && handleToKey.get(rec.handle) === rec.key) {
-        handleToKey.delete(rec.handle);
-      }
-    };
+    const keys = NotesCoreRef.createKeyIndex();
+    const byKey = keys.byKey;
+    const indexRecord = (rec) => keys.put(rec);
+    const unindexRecord = (rec) => keys.drop(rec);
 
     return {
       load: function (records) {
-        byKey.clear();
-        handleToKey.clear();
+        keys.clear();
         for (const r of Array.isArray(records) ? records : []) {
           if (!r || typeof r !== "object") continue;
           const cid = ViewerNotesModel.normalizeChannelId(r.channelId || r.key);
           const handle = ViewerNotesModel.normalizeHandle(r.handle || (!cid ? r.key : null));
-          const key = cid || handle;
+          const key = NotesCoreRef.recordKey(cid, handle);
           if (!key) continue;
           const customNickname = ViewerNotesModel.cleanNick(r.customNickname);
           const notes = ViewerNotesModel.cleanNotes(r.notes);
@@ -115,18 +97,12 @@ const ViewerNotesModel = {
 
       find: function (identity) {
         const { channelId, handle } = ViewerNotesModel.normalizeIdentity(identity);
-        if (channelId && byKey.has(channelId)) return byKey.get(channelId);
-        if (handle) {
-          const mapped = handleToKey.get(handle);
-          if (mapped && byKey.has(mapped)) return byKey.get(mapped);
-          if (byKey.has(handle)) return byKey.get(handle);
-        }
-        return null;
+        return keys.find(channelId, handle);
       },
 
       patch: function (identity, patch, now = Date.now()) {
         const { channelId, handle } = ViewerNotesModel.normalizeIdentity(identity);
-        const primaryKey = channelId || handle;
+        const primaryKey = NotesCoreRef.recordKey(channelId, handle);
         if (!primaryKey) return { record: null, saved: null, removedKeys: [] };
 
         const removedKeys = [];
@@ -198,7 +174,7 @@ const ViewerNotesModel = {
       },
 
       count: function () {
-        return byKey.size;
+        return keys.size;
       },
 
       list: function () {
@@ -213,8 +189,7 @@ const ViewerNotesModel = {
       },
 
       clear: function () {
-        byKey.clear();
-        handleToKey.clear();
+        keys.clear();
       },
     };
   },
@@ -247,13 +222,7 @@ const BgNotes = {
   },
 
   bumpRev: function () {
-    try {
-      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ [this.REV_KEY]: Date.now() });
-      }
-    } catch {
-      // ignore
-    }
+    NotesCoreRef.bumpRev(this.REV_KEY);
   },
 
   lookup: async function (ids) {
@@ -273,10 +242,7 @@ const BgNotes = {
     await this.ready();
     const res = this.index.patch(identity, patch);
     try {
-      if (this.store) {
-        if (res.removedKeys.length) await idbKeyval.delMany(res.removedKeys, this.store);
-        if (res.saved) await idbKeyval.set(res.saved.key, res.saved, this.store);
-      }
+      if (this.store) await NotesCoreRef.writeChanges(idbKeyval, this.store, res.saved ? [res.saved] : [], res.removedKeys);
     } catch (e) {
       if (typeof Logger !== "undefined") Logger.red("[BgNotes] 寫入失敗:", e);
     }
@@ -301,8 +267,7 @@ const BgNotes = {
     await this.ready();
     if (!Array.isArray(records)) return { count: 0 };
     let count = 0;
-    const toWrite = new Map();
-    const toRemove = new Set();
+    const changes = NotesCoreRef.createChangeSet();
     for (const r of records) {
       if (!r || typeof r !== "object") continue;
       const cid = ViewerNotesModel.normalizeChannelId(r.channelId || r.key);
@@ -311,24 +276,12 @@ const BgNotes = {
       const merged = ViewerNotesModel.mergeImportPatch(this.index.find({ channelId: cid, handle }), r);
       if (!merged) continue;
       const res = this.index.patch({ channelId: cid, handle }, merged.patch, merged.updatedAt);
-      for (const k of res.removedKeys) {
-        toRemove.add(k);
-        toWrite.delete(k);
-      }
-      if (res.saved) {
-        toWrite.set(res.saved.key, res.saved);
-        toRemove.delete(res.saved.key);
-        count++;
-      }
+      changes.add(res);
+      if (res.saved) count++;
     }
     try {
       if (this.store) {
-        if (toRemove.size) await idbKeyval.delMany([...toRemove], this.store);
-        if (toWrite.size) {
-          const entries = [...toWrite.entries()];
-          if (idbKeyval.setMany) await idbKeyval.setMany(entries, this.store);
-          else await Promise.all(entries.map(([k, v]) => idbKeyval.set(k, v, this.store)));
-        }
+        await NotesCoreRef.writeChanges(idbKeyval, this.store, [...changes.saved.values()], [...changes.removed]);
       }
     } catch (e) {
       if (typeof Logger !== "undefined") Logger.red("[BgNotes] 匯入失敗:", e);
