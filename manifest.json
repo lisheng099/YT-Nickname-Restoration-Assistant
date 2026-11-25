@@ -45,6 +45,7 @@
         "js/content/ui.js",
         "js/content/data_bridge.js",
         "js/content/scanner.js",
+        "js/shared/notes_core.js",
         "js/content/local_notes.js"
       ],
       "run_at": "document_idle",

@@ -1,7 +1,7 @@
 // ===========================================================
 // notes_core.js - 觀眾筆記的共用核心 (純邏輯，主播版與觀眾版共用)
 // 用途：暱稱 / 備註字串清理、主鍵規則 (頻道 ID 優先、@handle 備用)、
-//       以主鍵與 handle 雙向查找的索引、多筆修改的寫入 / 刪除清單，以及資料版本號通知。
+//       長度上限 (暱稱 / 備註)、以主鍵與 handle 雙向查找的索引、多筆修改的寫入 / 刪除清單，以及資料版本號通知。
 // 說明：主播版的 viewer_model.js 與 bg_viewers.js、觀眾版的 bg_notes.js 都建立在這裡之上；
 //       各版本自己的欄位 (標籤、評分、反應、雲端同步) 與合併規則留在各自檔案。
 //       不依賴瀏覽器 API (寫入函式除外)，可在 Node 測試中直接 require。
@@ -9,6 +9,14 @@
 
 (function (root) {
   const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
+
+  // 兩個擴充共用的筆記長度上限，與 worker/app/extension_sync.py 的 LIMITS 一致
+  // (worker/tests/test_sync_limits.py 會比對)。超過的部分在讀進索引與寫入時截掉。
+  const LIMITS = {
+    NICKNAME: 40,
+    NOTE: 500,
+    NOTES: 50,
+  };
 
   /** 字串本身是頻道 ID 就回傳它，否則 null (要不要先 trim 由呼叫端決定)。 */
   function channelIdOf(s) {
@@ -138,6 +146,7 @@
   }
 
   const api = {
+    LIMITS,
     CHANNEL_ID,
     channelIdOf,
     isHandleShape,

@@ -53,7 +53,7 @@ test("過長暱稱與備註自動截斷，無效識別碼略過", () => {
 
   const res = idx.patch(
     { channelId: UC_A },
-    { customNickname: "名".repeat(80), addNote: "備".repeat(400) },
+    { customNickname: "名".repeat(80), addNote: "備".repeat(600) },
     1000
   );
   assert.equal(res.record.customNickname.length, ViewerNotesModel.MAX_NICK_LEN);
@@ -82,4 +82,15 @@ test("匯入備份：只合併不刪除，較新的本機暱稱不會被舊備�
   const fresh = M.mergeImportPatch(null, { channelId: UC_B, customNickname: "B", updatedAt: 0 });
   assert.equal(fresh.patch.customNickname, "B");
   assert.ok(fresh.updatedAt > 0);
+});
+
+test("長度上限與主播版一致（暱稱 40、備註 500）；舊資料超過的部分在載入時截掉", () => {
+  assert.equal(ViewerNotesModel.MAX_NICK_LEN, 40);
+  assert.equal(ViewerNotesModel.MAX_NOTE_LEN, 500);
+  assert.equal(ViewerNotesModel.MAX_NOTES, 50);
+  const idx = ViewerNotesModel.createIndex();
+  idx.load([{ key: UC_A, channelId: UC_A, customNickname: "暱".repeat(45), notes: ["備".repeat(400)], updatedAt: 1 }]);
+  const rec = idx.find({ channelId: UC_A });
+  assert.equal(rec.customNickname, "暱".repeat(40));
+  assert.equal(rec.notes[0].length, 400, "notes up to 500 characters are kept");
 });

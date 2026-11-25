@@ -11,9 +11,10 @@ const NotesCoreRef =
 
 const ViewerNotesModel = {
   CHANNEL_ID: NotesCoreRef.CHANNEL_ID,
-  MAX_NICK_LEN: 50,
-  MAX_NOTE_LEN: 300,
-  MAX_NOTES: 50,
+  // 與主播版、worker 相同的上限 (notes_core.js)；1.3.3 以前暱稱可到 50 字、備註 300 字，舊資料超過的部分會被截掉
+  MAX_NICK_LEN: NotesCoreRef.LIMITS.NICKNAME,
+  MAX_NOTE_LEN: NotesCoreRef.LIMITS.NOTE,
+  MAX_NOTES: NotesCoreRef.LIMITS.NOTES,
 
   // Lowercase, 2-61 characters, no spaces or , / ? # & (fixtures/handle_cases.json). Unlike typed input, a value
   // without @ is not a handle here: on the page it is a display name, so it must never become a key.
