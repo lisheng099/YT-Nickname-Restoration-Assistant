@@ -378,13 +378,13 @@
   }
 
   /** 滑鼠移到名稱上時的提示內容：原名稱、handle、訂閱數、會員月份、備註。 */
+  // 自訂暱稱與備註關閉時仍顯示原名稱、訂閱數與會員月份，只是不帶暱稱、備註與操作提示
   function hoverInfo(e) {
-    if (!isEnabled) return null;
     const target = findNameTarget(e);
     if (!target) return null;
     const id = extractIdentity(target.host);
     const key = cacheKey(id);
-    const record = key ? cache.get(key) || null : null;
+    const record = isEnabled && key ? cache.get(key) || null : null;
     const nick = record && record.customNickname ? record.customNickname : "";
     const original = id.displayName && id.displayName !== id.handle ? id.displayName : "";
     return {
@@ -395,7 +395,7 @@
       isExpired: id.isExpired,
       member: memberLabel(target.host),
       notes: record && Array.isArray(record.notes) ? record.notes : [],
-      hint: key ? I18n.t("local_click_name_hint") : "",
+      hint: isEnabled && key ? I18n.t("local_click_name_hint") : "",
     };
   }
 
