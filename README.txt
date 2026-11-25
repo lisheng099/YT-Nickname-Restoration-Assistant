@@ -11,6 +11,9 @@
 2. 物理隔離： 權限僅限於 "https://www.youtube.com/*"，"https://studio.youtube.com/*"。
 3. 開源透明： 程式碼完全公開，歡迎社群檢視。
 
+## 🙏 致謝 (Acknowledgements)
+本擴充功能靈感源自「YTid 名稱修復器」，特別感謝 夜有風 的分享！
+
 ## ✨ 主要功能 (Features)
 - 自動還原： 支援直播聊天室 (Live Chat) 與影片留言區 (Comments)。
 - 智慧快取： 採用 IndexedDB/Storage 本地快取技術，減少網路請求。

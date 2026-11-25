@@ -10,3 +10,4 @@
 
 - 商店上的名稱與簡短說明來自 `_locales/*/messages.json` 的 `appName` / `appDesc`（隨 zip 上傳，後台不用另外填；`appDesc` 上限 132 字元）。
 - 功能、上限或權限有變動時，四個語言檔與 `privacy-practices.txt` 要一起改，並對照 `manifest.json`。
+- 商店說明不要放人名致謝、其他產品或服務名稱（例如 Discord、StreamMemo 創作者版）：2026-11-25 曾因致謝句被以「關鍵字垃圾內容 (Yellow Argon)」退回。致謝放在 README。
