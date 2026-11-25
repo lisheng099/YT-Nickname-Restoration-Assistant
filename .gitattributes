@@ -1,0 +1,20 @@
+# One line ending everywhere (LF), so diffs show real changes only. See docs/audit-dev.md A2.
+* text=auto eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.py text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
