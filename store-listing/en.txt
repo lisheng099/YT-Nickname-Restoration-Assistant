@@ -14,7 +14,7 @@ We adhere strictly to a "100% Local, Privacy First" policy. Name lookups are sen
 - Smart Cache Lifecycle: Names are cached locally for 15 days by default before refreshing in the background, and entries not refreshed for 30 days are cleaned up automatically to save space.
 
 2. Local Custom Nicknames & Notes
-- Only the name is used: hover over a chatter's name in Live Chat (including chat replay and YouTube Studio live chat) to see the original channel name, subscriber count, membership months and your notes; click the name to open your private notes window (can be toggled on/off in settings; enabled by default). Avatars keep YouTube's own behavior.
+- Only the name is used: hover over a chatter's name in Live Chat (including chat replay and YouTube Studio live chat), video comments or Shorts comments to see the original channel name, subscriber count, membership months and your notes; click the name to open your private notes window (can be toggled on/off in settings; enabled by default). Avatars keep YouTube's own behavior.
 - Custom Nickname: Give regulars a memorable alias (up to 40 characters) that replaces their displayed name in Live Chat (preserving member colors; hover to see the original channel name).
 - Personal Notes: Add or remove text notes for each viewer (up to 50 notes, 500 characters each). Names with notes show a small 📝 mark—hover over the name to preview them.
 - One Viewer List: The "Viewer Data" page shows every viewer in one list—cached channel names together with your nicknames and notes. Search by name, @handle, channel ID, nickname or note, edit any row directly, or add a viewer by @handle, channel ID or channel URL (handy for writing notes after a stream).
@@ -36,7 +36,7 @@ Hover your mouse over a restored name to see a floating info card:
 - Language Switcher: Supports English, Traditional Chinese, Simplified Chinese, and Japanese.
 - Theme Switcher: Choose between Follow System, Light, and Dark mode—applied to the popup, Viewer Data page, and chat notes window.
 - Max Name Length: Set the display character limit (5–50, default: 20 chars) to keep chat tidy.
-- Click to Copy URL: When enabled, clicking a restored name copies the channel URL (in Live Chat with nicknames & notes on, use the 🔗 button in the notes window instead).
+- Click to Copy URL: When enabled, clicking a restored name copies the channel URL (in Live Chat and comments with nicknames & notes on, use the 🔗 button in the notes window instead).
 - Dual-Node Replace: Keeps YouTube's original name colors and member styles (page reload needed after changing).
 - Nicknames & Notes Toggle: Turn name-click editing and custom nickname display on or off anytime.
 - Fetch Speed Control: Choose between "Normal" and "Slow (Safe Mode)" to match your viewing habits.

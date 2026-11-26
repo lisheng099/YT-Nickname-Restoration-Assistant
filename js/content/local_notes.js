@@ -1,6 +1,6 @@
 // ===========================================================
 // local_notes.js - 觀眾版本機自訂暱稱與備註面板 (100% 本機運作)
-// 用途：在 YouTube 聊天室只佔用「名稱」：滑鼠移到名稱顯示原名稱、訂閱數、會員月份與備註，
+// 用途：在 YouTube 聊天室、影片留言區與 Shorts 留言區只佔用「名稱」：滑鼠移到名稱顯示原名稱、訂閱數、會員月份與備註，
 //       點擊名稱開啟自訂暱稱（直接替換顯示名稱）與備註的編輯視窗；頭像維持 YouTube 原本的行為。
 //       資料僅存於本機瀏覽器，不上傳至任何伺服器。可於擴充功能彈出視窗開關（預設開啟）。
 // ===========================================================
@@ -8,15 +8,8 @@
 (function () {
   if (!location.pathname.startsWith("/live_chat") && window !== window.top) return;
 
-  const HOST_SELECTOR = [
-    "yt-live-chat-text-message-renderer",
-    "yt-live-chat-paid-message-renderer",
-    "yt-live-chat-membership-item-renderer",
-    "yt-live-chat-paid-sticker-renderer",
-    "ytd-sponsorships-live-chat-gift-purchase-announcement-renderer",
-  ].join(",");
-
-  const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+  // 聊天訊息與留言 (影片、Shorts) 都適用，名稱的定位規則在 js/shared/name_target.js
+  const HOST_SELECTOR = [...NameTarget.CHAT_HOSTS, ...NameTarget.COMMENT_HOSTS].join(",");
   const STYLE_ID = "sm-local-notes-style";
   const PANEL_ID = "sm-local-notes-panel";
   const NICK_CLASS = "sm-local-nick-name";
@@ -40,7 +33,9 @@
     style.id = STYLE_ID;
     style.textContent = `
       [${CUSTOM_ATTR}="1"] #author-name,
-      [${CUSTOM_ATTR}="1"] .rn-restored-name {
+      [${CUSTOM_ATTR}="1"] .rn-restored-name,
+      [${CUSTOM_ATTR}="1"] #author-text,
+      [${CUSTOM_ATTR}="1"] ytd-author-comment-badge-renderer {
         display: none !important;
       }
       .${NICK_CLASS} {
@@ -50,11 +45,13 @@
         vertical-align: baseline;
       }
       [${EDITABLE_ATTR}="1"] #author-name,
+      [${EDITABLE_ATTR}="1"] #author-text,
       [${EDITABLE_ATTR}="1"] .${DUAL_CLASS},
       [${EDITABLE_ATTR}="1"] .${NICK_CLASS} {
         cursor: pointer;
       }
       [${EDITABLE_ATTR}="1"] #author-name:hover,
+      [${EDITABLE_ATTR}="1"] #author-text:hover,
       [${EDITABLE_ATTR}="1"] .${DUAL_CLASS}:hover,
       [${EDITABLE_ATTR}="1"] .${NICK_CLASS}:hover {
         text-decoration: underline dotted;
@@ -242,73 +239,30 @@
   }
 
   function extractIdentity(host) {
-    const cidRaw = (host.getAttribute("data-rn-cid") || "").trim();
-    const channelId = CHANNEL_ID_RE.test(cidRaw) ? cidRaw : null;
-    const author = host.querySelector("#author-name");
-    const dual = host.querySelector(".rn-restored-name");
-    let handle =
-      (dual && dual.dataset.rnHandle) ||
-      (author && (author.dataset.rnHandle || author.dataset.rnTargetHandle)) ||
-      "";
-    if (!handle && author) {
-      const txt = (author.textContent || "").trim();
-      if (txt.startsWith("@") && !/\s/.test(txt)) handle = txt;
-    }
-    handle = handle && handle.startsWith("@") ? handle.toLowerCase() : null;
+    const author = NameTarget.authorOf(host);
+    const dual = NameTarget.restoredOf(host, author);
+    const channelId = NameTarget.channelIdOf(host, author) || null;
+    const rawHandle = NameTarget.handleOf(host, author);
+    const handle = rawHandle ? rawHandle.toLowerCase() : null;
+    // 留言的名稱元素裡同時有還原後的名稱與隱藏的原文字，有還原節點時不讀整段文字
     const displayName =
       (dual && dual.dataset.rnName) ||
       (author && author.dataset.rnName) ||
-      (author && author.textContent && author.textContent.trim()) ||
+      (author && !dual ? (author.textContent || "").trim() : "") ||
       handle ||
       channelId ||
       "";
     const subs = Number((dual && dual.dataset.rnSubs) || (author && author.dataset.rnSubs) || 0) || 0;
     const isExpired = !!((dual && dual.dataset.rnExpired === "true") || (author && author.dataset.rnExpired === "true"));
-    return { channelId, handle, displayName, subs, isExpired, author };
-  }
-
-  /** 會員徽章的文字 (YouTube 原生的提示，例如「會員 (6 個月)」「New member」)；不是會員時為空字串。 */
-  function memberLabel(host) {
-    const badges = host.querySelectorAll("yt-live-chat-author-badge-renderer");
-    for (const b of badges) {
-      if ((b.getAttribute("type") || "").toLowerCase() !== "member") continue;
-      const img = b.querySelector("img");
-      const label = (b.getAttribute("aria-label") || (img && img.getAttribute("alt")) || "").trim();
-      if (label) return label;
-    }
-    return "";
+    return { channelId, handle, rawHandle, displayName, subs, isExpired, author };
   }
 
   /**
-   * 事件路徑上的「名稱」元素 (原生 #author-name、還原後的名稱、自訂暱稱) 與所屬的聊天訊息；
-   * 留言內文裡的 @提及 不算，避免點到別人的名字卻開啟留言者的視窗。
+   * 事件路徑上的「名稱」元素 (原生名稱、還原後的名稱、自訂暱稱) 與所屬的聊天訊息或留言；
+   * 留言內文裡的 @提及 與頭像不算，避免點到別人的名字卻開啟留言者的視窗。
    */
   function findNameTarget(e) {
-    const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-    const nodes = path.length ? path : [];
-    if (!nodes.length) {
-      let n = e.target;
-      while (n) {
-        nodes.push(n);
-        n = n.parentNode;
-      }
-    }
-    for (const node of nodes) {
-      if (!node || node.nodeType !== 1) continue;
-      if (node.matches && node.matches(HOST_SELECTOR)) return null;
-      const isName =
-        node.id === "author-name" ||
-        (node.classList && (node.classList.contains(NICK_CLASS) || node.classList.contains(DUAL_CLASS)));
-      if (!isName) continue;
-      if (node.closest("#message")) return null;
-      const parent = node.parentNode;
-      if (node.id !== "author-name" && !(parent && parent.querySelector && parent.querySelector(":scope > #author-name"))) {
-        return null;
-      }
-      const host = node.closest(HOST_SELECTOR);
-      return host ? { host, nameEl: node } : null;
-    }
-    return null;
+    return NameTarget.findNameTarget(e, HOST_SELECTOR, [NICK_CLASS]);
   }
 
   function cacheKey(id) {
@@ -390,17 +344,17 @@
     return {
       name: nick || original || id.handle || id.channelId || "",
       original: nick && original && original !== nick ? original : "",
-      handle: id.handle || "",
+      handle: id.rawHandle || id.handle || "",
       subs: id.subs,
       isExpired: id.isExpired,
-      member: memberLabel(target.host),
+      member: NameTarget.memberLabel(target.host),
       notes: record && Array.isArray(record.notes) ? record.notes : [],
       hint: isEnabled && key ? I18n.t("local_click_name_hint") : "",
     };
   }
 
   function channelUrl(id) {
-    if (id.handle) return `https://www.youtube.com/${id.handle}`;
+    if (id.handle) return `https://www.youtube.com/${id.rawHandle || id.handle}`;
     if (id.channelId) return `https://www.youtube.com/channel/${id.channelId}`;
     return "";
   }
@@ -478,6 +432,16 @@
         }
       });
       tools.appendChild(copyBtn);
+      // 留言區的名稱也改成開啟這個視窗，要前往頻道頁由這裡開新分頁
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "sm-ln-icon sm-ln-open";
+      openBtn.textContent = "↗";
+      openBtn.title = I18n.t("open_channel") || "前往頻道";
+      openBtn.addEventListener("click", () => {
+        window.open(url, "_blank", "noopener");
+      });
+      tools.appendChild(openBtn);
     }
     const managerBtn = document.createElement("button");
     managerBtn.type = "button";
@@ -706,7 +670,6 @@
   }
 
   function init() {
-    if (!location.pathname.startsWith("/live_chat")) return;
     ensureStyles();
 
     const localNotesKey = (window.AppConfig && window.AppConfig.LOCAL_NOTES_KEY) || "yt_realname_local_notes";
@@ -746,6 +709,10 @@
           });
         } else if (m.type === "attributes" && m.attributeName === "data-rn-cid") {
           queueHost(m.target);
+        } else if (m.type === "attributes" && m.target.id === "author-text") {
+          // YouTube 把同一則留言元素換給另一位留言者時會改寫名稱連結
+          const host = m.target.closest && m.target.closest(HOST_SELECTOR);
+          if (host) queueHost(host);
         }
       }
     });
@@ -753,7 +720,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-rn-cid"],
+      attributeFilter: ["data-rn-cid", "href"],
     });
 
     if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {

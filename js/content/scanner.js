@@ -75,8 +75,11 @@ class PageScanner {
       },
       {
         // 新版留言區作者名稱的連結 (作為備用或特定視圖)
+        // leaf: 連結裡已有 YouTube 的名稱 <span> 時交給上一條處理，避免同一個名稱被處理兩次
+        // (兩次處理會留下兩份不同的提示資料：一份只有名稱、一份有名稱與 handle)
         sel: "ytd-comment-view-model h3 > a",
         mode: this.MODE.STANDARD,
+        leaf: true,
       },
       {
         // 留言區作者的特殊徽章文字 (例如：被創作者按愛心)
@@ -474,8 +477,13 @@ class PageScanner {
     if (this.fuseFrontendStatus === "TRIPPED") return;
 
     try {
+        // 本擴充自己插入的名稱節點 (還原後的名稱、替換後的文字) 不再當成目標
+        if (el.closest("[data-rn-span], ." + TooltipManager.DUAL_CLASS)) return;
         const config = this.targetConfigs.find((c) => el.matches(c.sel));
         if (!config) return;
+        if (config.leaf && el.querySelector(":scope > span:not([data-rn-span]), :scope > ." + TooltipManager.DUAL_CLASS)) {
+          return;
+        }
 
         const rawText = this.getNativeText(el);
         const mode = config.mode;
