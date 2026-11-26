@@ -638,7 +638,7 @@ class PageScanner {
       } catch (e) {
           this.reportFrontendError(); // 渲染過程出錯也算
       }
-    });
+    }, element);
   }
 
   applyUpdate(el, handle, data) {

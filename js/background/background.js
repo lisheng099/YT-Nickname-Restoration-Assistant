@@ -106,7 +106,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "RESOLVE_CHANNEL_INFO") {
     const tabId = sender.tab ? sender.tab.id : null;
-    handleResolveChannelInfo(request.handle, request.ttlMs, tabId).then((result) =>
+    handleResolveChannelInfo(request.handle, request.ttlMs, tabId, request).then((result) =>
       sendResponse(result)
     );
     return true;
@@ -167,7 +167,9 @@ async function handleCacheGet(handle, sendResponse) {
   sendResponse(await lookupCache(handle));
 }
 
-async function handleResolveChannelInfo(handle, ttlMs, tabId) {
+// options.cacheOnly: 只查快取，未命中回傳 { miss: true } (頁面端再依畫面位置決定何時抓取)
+// options.priority: 網路抓取的優先級，頁面上的名稱用 "normal" (先進先出)，未指定時為 "high"
+async function handleResolveChannelInfo(handle, ttlMs, tabId, options = {}) {
   if (!handle) return { success: false };
   const cached = await lookupCache(handle);
   if (cached && cached.name) {
@@ -182,10 +184,12 @@ async function handleResolveChannelInfo(handle, ttlMs, tabId) {
       isExpired,
     };
   }
+  if (options.cacheOnly) return { success: false, miss: true };
   if (BgFetcher.fuseBackend.status === "TRIPPED") {
     return { success: false, error: "Fuse Tripped" };
   }
-  const fetched = await resolveChannelInfo(handle, "high", false, tabId);
+  const priority = options.priority === "normal" ? "normal" : "high";
+  const fetched = await resolveChannelInfo(handle, priority, false, tabId);
   if (fetched && fetched.success) {
     return {
       success: true,
