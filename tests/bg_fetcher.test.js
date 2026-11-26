@@ -310,3 +310,23 @@ test("串流讀取：跳脫引號切在區塊邊界時仍能精準擷取 ytIniti
   assert.equal(state.cancelled, true);
 });
 
+
+test("normal 優先級依送達順序處理，high 插到最前面", async () => {
+  reset((url) => okPage(url.split("@")[1]));
+  BgFetcher.maxConcurrency = 1;
+  BgFetcher.speedMode = "SLOW";
+  const all = [
+    BgFetcher.fetch("@n1", "normal"),
+    BgFetcher.fetch("@n2", "normal"),
+    BgFetcher.fetch("@n3", "normal"),
+    BgFetcher.fetch("@h1", "high"),
+  ];
+  await Promise.all(all);
+  // 第一筆在加入時就開始執行，其餘：high 插隊，normal 先進先出
+  assert.deepEqual(
+    fetchCalls.map((u) => u.split("@")[1]),
+    ["n1", "h1", "n2", "n3"]
+  );
+  BgFetcher.speedMode = "NORMAL";
+  BgFetcher.maxConcurrency = 3;
+});

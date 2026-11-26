@@ -181,8 +181,8 @@ const BgFetcher = {
 
       // 請求去重 (Merge Requests)
       if (this.activeTasks.has(key)) {
-        if (priority === "high") {
-          this.promoteTask(key, tabId);
+        if (priority === "high" || priority === "normal") {
+          this.promoteTask(key, tabId, priority);
         }
         Logger.orange(`[Duplicate] ${handle} 正在抓取中，合併請求。`);
         this.activeTasks.get(key).push(resolve);
@@ -192,9 +192,15 @@ const BgFetcher = {
       // 建立新任務
       this.activeTasks.set(key, [resolve]);
 
+      // high: 手動查詢等要立刻處理的請求，插到最前面
+      // normal: 頁面上的名稱，依送達順序 (先進先出)；頁面端已先挑好畫面內的名稱，
+      //         並限制每個頁框同時送來的數量，所以聊天室與留言區會輪流被處理
+      // low: 過期資料的背景更新
       const taskItem = { handle, key, tabId };
       if (priority === "high") {
         this.queue.high.unshift(taskItem);
+      } else if (priority === "normal") {
+        this.queue.high.push(taskItem);
       } else {
         this.queue.low.push(taskItem);
       }
@@ -209,13 +215,14 @@ const BgFetcher = {
     });
   },
 
-  promoteTask: function (key, tabId) {
+  promoteTask: function (key, tabId, priority = "high") {
     let foundIndex = -1;
     let foundQueue = null;
 
-    // 檢查 High Queue
+    // 檢查 High Queue (normal 已經在這個佇列裡時不必移動)
     foundIndex = this.queue.high.findIndex((t) => t.key === key);
     if (foundIndex !== -1) {
+      if (priority !== "high") return;
       foundQueue = this.queue.high;
     } else {
       // 檢查 Low Queue
@@ -228,7 +235,8 @@ const BgFetcher = {
     if (foundIndex !== -1 && foundQueue) {
       const task = foundQueue.splice(foundIndex, 1)[0];
       if (tabId) task.tabId = tabId;
-      this.queue.high.unshift(task);
+      if (priority === "high") this.queue.high.unshift(task);
+      else this.queue.high.push(task);
       Logger.info(`[Promote] ${task.handle} 優先權提升至首位`);
     }
   },
