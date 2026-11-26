@@ -429,7 +429,8 @@ class PageScanner {
           child.nodeType === 1 &&
           child.classList &&
           (child.classList.contains(TooltipManager.DUAL_CLASS) ||
-            child.classList.contains(TooltipManager.NATIVE_HIDDEN_CLASS))
+            child.classList.contains(TooltipManager.NATIVE_HIDDEN_CLASS) ||
+            child.hasAttribute("data-rn-own"))
         ) {
           continue;
         }
@@ -439,7 +440,8 @@ class PageScanner {
       const hidden = el.querySelector(":scope > ." + TooltipManager.NATIVE_HIDDEN_CLASS);
       if (hidden) return (hidden.textContent || "").trim();
     }
-    return (el.textContent || "").trim();
+    // 名稱元素裡的自訂暱稱 ([data-rn-own]) 不是 YouTube 的文字
+    return NameTarget.nativeTextOf(el).trim();
   }
 
   observeInPlaceHidden(el) {
@@ -480,10 +482,11 @@ class PageScanner {
         // 本擴充自己插入的名稱節點 (還原後的名稱、替換後的文字) 不再當成目標
         // (隱藏容器裡是 YouTube 原本的名稱，由所屬的名稱元素處理；
         //  留言的選擇器 "#author-text span" 也會選到它，必須略過)
-        if (el.closest("[data-rn-span], ." + TooltipManager.DUAL_CLASS + ", ." + TooltipManager.NATIVE_HIDDEN_CLASS)) return;
+        // ([data-rn-own] 是放在名稱元素裡的自訂暱稱，留言的 "#author-text span" 也會選到)
+        if (el.closest("[data-rn-span], [data-rn-own], ." + TooltipManager.DUAL_CLASS + ", ." + TooltipManager.NATIVE_HIDDEN_CLASS)) return;
         const config = this.targetConfigs.find((c) => el.matches(c.sel));
         if (!config) return;
-        if (config.leaf && el.querySelector(":scope > span:not([data-rn-span]), :scope > ." + TooltipManager.DUAL_CLASS)) {
+        if (config.leaf && el.querySelector(":scope > span:not([data-rn-span]):not([data-rn-own]), :scope > ." + TooltipManager.DUAL_CLASS)) {
           return;
         }
 

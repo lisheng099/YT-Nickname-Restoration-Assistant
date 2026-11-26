@@ -17,6 +17,10 @@
   // 影片與 Shorts 的留言 (新版 ViewModel 與舊版 renderer)
   const COMMENT_HOSTS = ["ytd-comment-view-model", "ytd-comment-renderer"];
   const DUAL_CLASS = "rn-restored-name";
+  // 擴充功能放進「名稱元素裡面」的自訂暱稱等節點 (不是 YouTube 的名稱文字)
+  const OWN_ATTR = "data-rn-own";
+  // 聊天室 #author-name 裡直接放的原文字 (尚未還原時) 包進這個 span，才能用 CSS 隱藏
+  const NATIVE_TEXT_CLASS = "rn-native-text";
   const OWNER_BADGE = "ytd-author-comment-badge-renderer";
   const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
   // 名稱以外、不能當成名稱的區塊 (訊息與留言內文：裡面的 @提及 是別人的名字)
@@ -62,6 +66,69 @@
     return prev && prev.classList && prev.classList.contains(DUAL_CLASS) ? prev : null;
   }
 
+  /** 名稱元素裡 YouTube 自己的文字 (不含擴充功能放進去的自訂暱稱)。 */
+  function nativeTextOf(author) {
+    if (!author) return "";
+    if (!author.querySelector || !author.querySelector(":scope > [" + OWN_ATTR + "]")) return author.textContent || "";
+    let text = "";
+    for (const child of author.childNodes) {
+      if (child.nodeType === 1 && child.hasAttribute(OWN_ATTR)) continue;
+      text += child.textContent || "";
+    }
+    return text;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 自訂暱稱：放在 YouTube 原本的名稱元素「裡面」(第一個子元素)，用 CSS 隱藏其他子元素。
+  // 不可改回「隱藏整個名稱元素、在旁邊另放一份複製樣式的名稱」：
+  // 自訂聊天室 CSS (直播畫面、Stylus) 選的是 #author-name / 名稱連結，旁邊的節點選不到；
+  // 複製的樣式只是當下的快照，之後才載入的 CSS、陰影、::before / ::after 都不會套上。
+  // 詳見 StreamMemo repo 的 extension-shared/README.md「名稱放在原本的名稱元素裡」。
+  // ---------------------------------------------------------------------------
+  function setCustomName(author, cls, text) {
+    if (!author) return null;
+    let el = author.querySelector(":scope > ." + cls);
+    if (!el) {
+      el = document.createElement("span");
+      el.className = cls;
+      el.setAttribute(OWN_ATTR, "1");
+      // 只在新建時放到最前面；之後不搬動，避免與還原名稱互相搶第一個位置
+      author.insertBefore(el, author.firstChild);
+    }
+    if (author.id === "author-name") {
+      for (const n of Array.from(author.childNodes)) {
+        if (n.nodeType === 3 && n.data.trim()) {
+          const wrap = document.createElement("span");
+          wrap.className = NATIVE_TEXT_CLASS;
+          author.insertBefore(wrap, n);
+          wrap.appendChild(n);
+        }
+      }
+    }
+    if (el.textContent !== text) el.textContent = text;
+    return el;
+  }
+
+  function clearCustomName(author, cls) {
+    const el = author && author.querySelector && author.querySelector(":scope > ." + cls);
+    if (el) el.remove();
+  }
+
+  /**
+   * 有自訂暱稱時隱藏名稱元素裡的其他文字：原本的名稱、還原後的名稱文字。
+   * 保留名稱旁沒有文字的徽章圖示 (#chip-badges) 與還原名稱的訂閱數圓點。
+   */
+  function customNameCss(attr, cls) {
+    const on = "[" + attr + '="1"]';
+    const keep = ":not(." + cls + "):not(:has(." + DUAL_CLASS + ")):not(." + DUAL_CLASS + ")";
+    return (
+      on + " #author-name > " + keep + ":not(#chip-badges)," +
+      on + " #author-text > " + keep + "," +
+      on + " ytd-author-comment-badge-renderer > " + keep + "," +
+      on + " ." + DUAL_CLASS + " > [data-rn-span]{display:none !important}"
+    );
+  }
+
   function hrefOf(author) {
     if (!author) return "";
     const link = author.matches && author.matches("a[href]") ? author : author.querySelector && author.querySelector("a[href]");
@@ -88,7 +155,7 @@
       if (inner) handle = inner.dataset.rnTargetHandle || "";
     }
     if (!handle) {
-      const raw = (author.textContent || "").trim();
+      const raw = nativeTextOf(author).trim();
       if (/^@[^\s]+$/.test(raw)) handle = raw;
     }
     if (!handle) {
@@ -175,7 +242,13 @@
     CHAT_HOSTS,
     COMMENT_HOSTS,
     DUAL_CLASS,
+    OWN_ATTR,
+    NATIVE_TEXT_CLASS,
     isComment,
+    nativeTextOf,
+    setCustomName,
+    clearCustomName,
+    customNameCss,
     authorOf,
     restoredOf,
     handleOf,
