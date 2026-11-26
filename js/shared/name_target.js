@@ -48,11 +48,16 @@
     return text || badge || null;
   }
 
-  /** 暱稱還原後的名稱節點 (scanner 以雙節點插入)：聊天室在 #author-name 前方，留言在名稱元素內。 */
+  /**
+   * 暱稱還原後的名稱節點 (scanner 以雙節點插入)：在名稱元素裡面 (聊天室是 #author-name 的第一個子元素，
+   * 留言在名稱連結內的 <span> 裡)。舊版放在 #author-name 前方，一併認得。
+   */
   function restoredOf(host, author) {
     author = author || authorOf(host);
     if (!author) return null;
     if (isComment(host)) return author.querySelector("." + DUAL_CLASS);
+    const inside = author.querySelector(":scope > ." + DUAL_CLASS);
+    if (inside) return inside;
     const prev = author.previousElementSibling;
     return prev && prev.classList && prev.classList.contains(DUAL_CLASS) ? prev : null;
   }
@@ -162,6 +167,7 @@
     }
     if (nameEl.id === "author-name") return true;
     const parent = nameEl.parentNode;
+    if (parent && parent.id === "author-name") return true;
     return !!(parent && parent.querySelector && parent.querySelector(":scope > #author-name"));
   }
 
