@@ -480,7 +480,7 @@ const TooltipManager = {
 
   bindCopyEvent: function (element, handle) {
     element.style.cursor = "pointer";
-    element.title = I18n.t("copy_link");
+    // 不設原生 title：名稱只顯示擴充功能自己的一個提示
     element.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -511,6 +511,7 @@ const TooltipManager = {
     }
   },
 
+  // 徽章不設原生 title，避免滑鼠經過時同時出現瀏覽器提示與擴充功能的提示
   getBadgeIcon: function (subs) {
     if (!subs || subs < 500) return null;
     const i = document.createElement("i");
@@ -524,19 +525,19 @@ const TooltipManager = {
 
     if (subs >= 1000000) {
       i.style.background = "#00BFA5";
-      i.title = I18n.t("subs_million");
+      i.setAttribute("aria-label", I18n.t("subs_million"));
     } else if (subs >= 100000) {
       i.style.background = "#FFD700";
-      i.title = I18n.t("subs_100k");
+      i.setAttribute("aria-label", I18n.t("subs_100k"));
     } else if (subs >= 10000) {
       i.style.background = "#C0C0C0";
-      i.title = I18n.t("subs_10k");
+      i.setAttribute("aria-label", I18n.t("subs_10k"));
     } else if (subs >= 1000) {
       i.style.background = "#CD7F32";
-      i.title = I18n.t("subs_1000"); 
+      i.setAttribute("aria-label", I18n.t("subs_1000")); 
     } else if (subs >= 500) {
       i.style.background = "#8D6E63";
-      i.title = I18n.t("subs_potential");
+      i.setAttribute("aria-label", I18n.t("subs_potential"));
     }
     return i;
   },

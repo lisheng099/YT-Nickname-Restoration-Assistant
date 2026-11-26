@@ -65,6 +65,13 @@ function createFakeDom() {
       this.childNodes = [];
       this.parentNode = null;
       this.isConnected = true;
+      this.attributes = {};
+    }
+    setAttribute(k, v) {
+      this.attributes[k] = String(v);
+    }
+    getAttribute(k) {
+      return k in this.attributes ? this.attributes[k] : null;
     }
     get firstChild() {
       return this.childNodes[0] || null;

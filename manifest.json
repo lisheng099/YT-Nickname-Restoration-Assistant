@@ -3,7 +3,7 @@
   "name": "__MSG_appName__",
   "description": "__MSG_appDesc__",
   "default_locale": "en",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "minimum_chrome_version": "111",
   "icons": {
     "16": "icons/logo.png",
@@ -42,6 +42,7 @@
         "js/shared/locales.js",
         "js/shared/i18n.js",
         "js/shared/theme.js",
+        "js/shared/name_target.js",
         "js/content/ui.js",
         "js/content/data_bridge.js",
         "js/content/scanner.js",
