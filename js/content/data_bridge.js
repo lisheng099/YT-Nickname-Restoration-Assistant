@@ -20,6 +20,16 @@ const DataBridge = {
   // 這裡只確保背景的佇列裡永遠是「現在最需要的名稱」，也讓聊天室與留言區各自有份、不會互相卡住。
   NET_SLOTS: 4,
   NEAR_MARGIN: "100% 0px",
+  // 挑選順序 (每個頁框各自決定)：
+  // - "newest"：最新出現的先抓 (直播聊天室：最新訊息在最下面，舊訊息很快就捲走)
+  // - "oldest"：依頁面順序由上往下 (影片與 Shorts 留言區)
+  ORDER: (() => {
+    try {
+      return typeof location !== "undefined" && location.pathname.startsWith("/live_chat") ? "newest" : "oldest";
+    } catch (e) {
+      return "oldest";
+    }
+  })(),
   netActive: 0,
   pumpTimer: null,
   io: null, // null = 尚未建立, false = 不支援
@@ -88,7 +98,7 @@ const DataBridge = {
   // - element: (選填) 顯示這個名稱的元素；網路抓取會優先處理畫面內與附近的元素
   //
   // 順序：頁內快取 -> 背景快取 (記憶體 / IndexedDB，不排隊、不受網路限制) -> 網路抓取。
-  // 網路抓取在這個頁框內最多同時送出 NET_SLOTS 筆，挑選順序是畫面內與附近的名稱優先 (依出現先後)，
+  // 網路抓取在這個頁框內最多同時送出 NET_SLOTS 筆，挑選順序是畫面內與附近的名稱優先 (先後見 ORDER)，
   // 離畫面很遠的名稱等捲動到附近才抓，已經離開頁面的名稱不再抓。
   getData: function (handle, callback, element) {
     if (!handle || typeof callback !== "function") return;
@@ -248,6 +258,10 @@ const DataBridge = {
       else if (tier === 0 || tier === 1) picks[tier].push(entry);
     });
     dropped.forEach((entry) => this.finish(entry, null));
+    if (this.ORDER === "newest") {
+      picks[0].reverse();
+      picks[1].reverse();
+    }
     const ordered = picks[0].concat(picks[1]);
     for (const entry of ordered) {
       if (this.netActive >= this.NET_SLOTS) break;

@@ -240,3 +240,23 @@ test("DataBridge：同一元素重複掃描只保留一個等待者", async () =
   assert.equal(calls, 1);
   assert.equal(sent.length, 1);
 });
+
+test("DataBridge：直播聊天室最新的先抓，留言區由上往下", async () => {
+  for (const [pathname, expected] of [
+    ["/live_chat", ["@m9", "@m8", "@m7", "@m6"]],
+    ["/watch", ["@m1", "@m2", "@m3", "@m4"]],
+  ]) {
+    const { DataBridge, sent, pendingReplies } = loadDataBridge({ location: { pathname } });
+    assert.equal(DataBridge.ORDER, pathname === "/live_chat" ? "newest" : "oldest");
+    for (let i = 0; i < 10; i++) DataBridge.getData(`@m${i}`, () => {});
+    // m0 先單獨送出並佔一個名額，再一次進來 9 筆
+    pendingReplies.shift().cb(MISS);
+    await tick();
+    pendingReplies.splice(0, 9).forEach((r) => r.cb(MISS));
+    await tick();
+    const net = sent.slice(10).map((m) => m.handle);
+    assert.equal(net[0], "@m0");
+    // 剩下 3 個名額
+    assert.deepEqual(net.slice(1), expected.slice(0, 3), pathname);
+  }
+});
