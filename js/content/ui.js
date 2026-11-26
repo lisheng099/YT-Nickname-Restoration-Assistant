@@ -43,8 +43,10 @@ const TooltipManager = {
   renderStandard: function (target, handle, displayName, subs, isExpired) {
     if (!target.isConnected) return;
 
-    // 清空舊內容
-    target.textContent = "";
+    // 清空舊內容 (保留放在名稱元素裡的自訂暱稱 [data-rn-own])
+    for (const child of Array.from(target.childNodes)) {
+      if (!(child.nodeType === 1 && child.hasAttribute("data-rn-own"))) child.remove();
+    }
 
     // 建立新內容
     const span = document.createElement("span");
@@ -103,6 +105,8 @@ const TooltipManager = {
       : null;
   },
 
+  // ⚠ 不可改回「隱藏原生節點、在旁邊另放一份複製樣式的名稱」(見 StreamMemo repo 的 extension-shared/README.md
+  //   「名稱放在原本的名稱元素裡」；e2e: tests/e2e/name_style.e2e.js)。
   // 名稱放在原生節點「裡面」：原生的文字收進隱藏容器，還原後的名稱插在最前面。
   // 原生節點本身維持顯示，所以 YouTube 或使用者自訂 CSS (例如直播畫面的聊天室樣式)
   // 對 #author-name / 留言名稱設定的顏色、粗細、陰影、::before / ::after 都會繼續套用，
@@ -142,6 +146,8 @@ const TooltipManager = {
     const toMove = [];
     for (const child of Array.from(target.childNodes)) {
       if (child === node || child === hidden) continue;
+      // 自訂暱稱 (NameTarget.setCustomName 放進來的 [data-rn-own]) 不是原生內容
+      if (child.nodeType === 1 && child.hasAttribute("data-rn-own")) continue;
       // keepIcons：沒有文字的元素 (徽章圖示等) 不收進隱藏容器
       if (keepIcons && child.nodeType === 1 && !(child.textContent || "").trim()) continue;
       toMove.push(child);
@@ -154,8 +160,6 @@ const TooltipManager = {
     if (!node) {
       node = document.createElement("span");
       node.className = this.DUAL_CLASS;
-      target.insertBefore(node, target.firstChild);
-    } else if (node !== target.firstChild) {
       target.insertBefore(node, target.firstChild);
     }
     if (!hidden.parentNode) {
@@ -189,33 +193,7 @@ const TooltipManager = {
     else delete target.dataset.rnExpired;
   },
 
-  NATIVE_STYLE_PROPS: [
-    "color",
-    "font-family",
-    "font-size",
-    "font-weight",
-    "font-style",
-    "line-height",
-    "letter-spacing",
-    "text-transform",
-    "background-color",
-    "padding",
-    "border-radius",
-  ],
-
-  // 隱藏原生節點之前，把它的計算後樣式複製到獨立節點
-  copyNativeStyle: function (from, to) {
-    try {
-      const cs = window.getComputedStyle(from);
-      // 原生節點已被隱藏時 (顯示 none) 計算值仍可讀取顏色與字體
-      this.NATIVE_STYLE_PROPS.forEach((prop) => {
-        const v = cs.getPropertyValue(prop);
-        if (v) to.style.setProperty(prop, v);
-      });
-    } catch (e) {
-      // 取不到就沿用繼承樣式
-    }
-  },
+  // (以前的 copyNativeStyle 已移除：名稱不再複製一份當下的樣式，見 renderDual 與 StreamMemo repo 的 extension-shared/README.md)
 
   // 還原：移除獨立節點並顯示原生節點 (原生文字不是 handle 時使用)
   restoreDual: function (target) {

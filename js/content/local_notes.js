@@ -32,18 +32,7 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      [${CUSTOM_ATTR}="1"] #author-name,
-      [${CUSTOM_ATTR}="1"] .rn-restored-name,
-      [${CUSTOM_ATTR}="1"] #author-text,
-      [${CUSTOM_ATTR}="1"] ytd-author-comment-badge-renderer {
-        display: none !important;
-      }
-      .${NICK_CLASS} {
-        display: inline-flex;
-        align-items: center;
-        margin-right: 4px;
-        vertical-align: baseline;
-      }
+      ${NameTarget.customNameCss(CUSTOM_ATTR, NICK_CLASS)}
       [${EDITABLE_ATTR}="1"] #author-name,
       [${EDITABLE_ATTR}="1"] #author-text,
       [${EDITABLE_ATTR}="1"] .${DUAL_CLASS},
@@ -248,7 +237,7 @@
     const displayName =
       (dual && dual.dataset.rnName) ||
       (author && author.dataset.rnName) ||
-      (author && !dual ? (author.textContent || "").trim() : "") ||
+      (author && !dual ? NameTarget.nativeTextOf(author).trim() : "") ||
       handle ||
       channelId ||
       "";
@@ -285,7 +274,7 @@
     const { author } = id;
     if (!author || !author.parentNode) return;
 
-    let nickEl = author.parentNode.querySelector(`:scope > .${NICK_CLASS}`);
+    let nickEl = author.querySelector(`:scope > .${NICK_CLASS}`);
     let markEl = author.parentNode.querySelector(`:scope > .${NOTE_MARK_CLASS}`);
 
     if (!isEnabled) {
@@ -299,16 +288,10 @@
     // 只佔用名稱：名稱可點擊開啟編輯視窗，滑鼠移上顯示資訊 (見 hoverInfo)
     host.setAttribute(EDITABLE_ATTR, "1");
 
-    // Custom nickname replaces the displayed author name while preserving native color/style
+    // 自訂暱稱放在原本的名稱元素裡 (見 NameTarget.setCustomName)：聊天室自訂 CSS 照常套用
     const nick = record && record.customNickname ? record.customNickname : "";
     if (nick) {
-      if (!nickEl) {
-        nickEl = document.createElement("span");
-        nickEl.className = NICK_CLASS;
-        author.insertAdjacentElement("afterend", nickEl);
-      }
-      nickEl.textContent = nick;
-      if (typeof TooltipManager !== "undefined") TooltipManager.copyNativeStyle(author, nickEl);
+      nickEl = NameTarget.setCustomName(author, NICK_CLASS, nick);
       host.setAttribute(CUSTOM_ATTR, "1");
     } else {
       host.removeAttribute(CUSTOM_ATTR);
@@ -325,7 +308,8 @@
         markEl.textContent = "📝";
         markEl.setAttribute("aria-hidden", "true");
       }
-      (nickEl || author).insertAdjacentElement("afterend", markEl);
+      // 記號放在名稱元素後方 (暱稱在名稱元素裡面)
+      if (author.nextElementSibling !== markEl) author.insertAdjacentElement("afterend", markEl);
     } else if (markEl) {
       markEl.remove();
     }
