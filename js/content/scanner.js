@@ -478,7 +478,9 @@ class PageScanner {
 
     try {
         // 本擴充自己插入的名稱節點 (還原後的名稱、替換後的文字) 不再當成目標
-        if (el.closest("[data-rn-span], ." + TooltipManager.DUAL_CLASS)) return;
+        // (隱藏容器裡是 YouTube 原本的名稱，由所屬的名稱元素處理；
+        //  留言的選擇器 "#author-text span" 也會選到它，必須略過)
+        if (el.closest("[data-rn-span], ." + TooltipManager.DUAL_CLASS + ", ." + TooltipManager.NATIVE_HIDDEN_CLASS)) return;
         const config = this.targetConfigs.find((c) => el.matches(c.sel));
         if (!config) return;
         if (config.leaf && el.querySelector(":scope > span:not([data-rn-span]), :scope > ." + TooltipManager.DUAL_CLASS)) {
@@ -682,10 +684,11 @@ class PageScanner {
         if (this.dualNode && el.dataset.rnMention !== "1" && el.tagName !== "A") {
           if (el.dataset.rnInPlaceDual === "1") {
             TooltipManager.renderDualInside(el, handle, displayName, fullName, data.subs, data.isExpired);
-            this.observeInPlaceHidden(el);
           } else {
             TooltipManager.renderDual(el, handle, displayName, fullName, data.subs, data.isExpired);
           }
+          // 原生文字收在隱藏容器裡：YouTube 直接改那段文字 (同一個元素換人) 時也要重新處理
+          this.observeInPlaceHidden(el);
           break;
         }
         TooltipManager.renderStandard(

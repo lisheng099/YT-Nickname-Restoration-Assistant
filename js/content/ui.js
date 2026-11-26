@@ -86,7 +86,7 @@ const TooltipManager = {
 
   // =======================================================
   // [模式 1-B] renderDual (雙節點替換)
-  // 用途：不動 YouTube 原本的文字節點，只將它隱藏，並在前方插入獨立的暱稱節點。
+  // 用途：不清空 YouTube 原本的文字節點，只把它收進隱藏容器，旁邊放獨立的暱稱節點。
   // 好處：YouTube 重複使用元素或改寫文字時，原節點仍是它自己管理的內容，
   //       不會被我們清空；換人時只需更新獨立節點，不會殘留上一位的內容。
   // =======================================================
@@ -103,45 +103,14 @@ const TooltipManager = {
       : null;
   },
 
+  // 名稱放在原生節點「裡面」：原生的文字收進隱藏容器，還原後的名稱插在最前面。
+  // 原生節點本身維持顯示，所以 YouTube 或使用者自訂 CSS (例如直播畫面的聊天室樣式)
+  // 對 #author-name / 留言名稱設定的顏色、粗細、陰影、::before / ::after 都會繼續套用，
+  // 之後才載入或才改變的樣式也會即時跟著變 (不再複製一份當下的計算樣式)。
+  // 沒有文字的子元素 (例如名稱旁的徽章圖示) 留在原處照常顯示。
   renderDual: function (target, handle, displayName, fullName, subs, isExpired) {
-    if (!target.isConnected || !target.parentNode) return;
-
-    let node = this.findDualNode(target);
-    if (!node) {
-      node = document.createElement("span");
-      node.className = this.DUAL_CLASS;
-      target.parentNode.insertBefore(node, target);
-    }
-
-    // 沿用原生節點的外觀 (擁有者藍色、管理員色、字體等由 YouTube 以 CSS 套在原生節點上)
-    this.copyNativeStyle(target, node);
-
-    node.textContent = "";
-    const nameSpan = document.createElement("span");
-    nameSpan.textContent = displayName;
-    nameSpan.dataset.rnSpan = "1";
-    this.applyTextStyle(nameSpan, null, isExpired);
-    if (this.canCopy) this.bindCopyEvent(nameSpan, handle);
-    node.appendChild(nameSpan);
-
-    const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
-    const badge = this.getBadgeIcon(numSubs);
-    if (badge) {
-      node.style.display = "inline-flex";
-      node.style.alignItems = "center";
-      node.style.gap = "4px";
-      node.appendChild(badge);
-    } else {
-      node.style.display = "";
-    }
-    this.attachData(node, handle, fullName, subs, isExpired);
-
-    // 隱藏原生節點 (內容保持原樣，仍可被 YouTube 與本工具讀取)
-    target.style.setProperty("display", "none", "important");
-    target.dataset.rnReplaced = "yes";
-    target.dataset.rnDual = "1";
-    if (isExpired) target.dataset.rnExpired = "true";
-    else delete target.dataset.rnExpired;
+    if (!target.isConnected) return;
+    this.renderDualInside(target, handle, displayName, fullName, subs, isExpired, { keepIcons: true });
   },
 
   // =======================================================
@@ -150,8 +119,9 @@ const TooltipManager = {
   //       #animation-container 內的間距、置中與 #stats-bar 切換動畫)，
   //       改於目標元素內部以隱藏容器封裝原有子節點，避免在父容器插入兄弟節點造成跑版。
   // =======================================================
-  renderDualInside: function (target, handle, displayName, fullName, subs, isExpired) {
+  renderDualInside: function (target, handle, displayName, fullName, subs, isExpired, opts) {
     if (!target.isConnected) return;
+    const keepIcons = !!(opts && opts.keepIcons);
 
     const sibling = target.previousElementSibling;
     if (sibling && sibling.classList && sibling.classList.contains(this.DUAL_CLASS)) {
@@ -171,7 +141,10 @@ const TooltipManager = {
 
     const toMove = [];
     for (const child of Array.from(target.childNodes)) {
-      if (child !== node && child !== hidden) toMove.push(child);
+      if (child === node || child === hidden) continue;
+      // keepIcons：沒有文字的元素 (徽章圖示等) 不收進隱藏容器
+      if (keepIcons && child.nodeType === 1 && !(child.textContent || "").trim()) continue;
+      toMove.push(child);
     }
     if (toMove.length > 0) {
       if (hadHidden) hidden.textContent = "";
@@ -181,6 +154,8 @@ const TooltipManager = {
     if (!node) {
       node = document.createElement("span");
       node.className = this.DUAL_CLASS;
+      target.insertBefore(node, target.firstChild);
+    } else if (node !== target.firstChild) {
       target.insertBefore(node, target.firstChild);
     }
     if (!hidden.parentNode) {
