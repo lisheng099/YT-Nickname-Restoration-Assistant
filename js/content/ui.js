@@ -70,9 +70,9 @@ const TooltipManager = {
         wrap.appendChild(badge);
         target.appendChild(wrap);
       } else {
-        target.style.display = "inline-flex";
-        target.style.alignItems = "center";
-        target.style.gap = "4px";
+        // 名稱元素本身不改成 inline-flex (見 renderDualInside 的 keepIcons 說明)
+        badge.style.verticalAlign = "middle";
+        badge.style.marginLeft = "4px";
         target.appendChild(span);
         target.appendChild(badge);
       }
@@ -176,13 +176,25 @@ const TooltipManager = {
 
     const numSubs = typeof subs === "number" ? subs : parseInt(subs || 0);
     const badge = this.getBadgeIcon(numSubs);
-    if (badge) {
+    if (badge && !keepIcons) {
       node.style.display = "inline-flex";
       node.style.alignItems = "center";
       node.style.gap = "4px";
       node.appendChild(badge);
     } else {
-      node.style.display = "";
+      // 名稱 (keepIcons)：還原節點維持一般的行內元素，不可用 inline-flex / inline-block。
+      // 聊天室樣式常把 #author-name 設成 overflow: hidden + text-overflow: ellipsis + max-width；
+      // 名稱放不下時，Chrome 會把整個 inline-flex 區塊 (名稱 + 訂閱數圓點) 換成省略號，
+      // 名稱整段消失只剩空白。一般行內元素則是文字照常截斷成「名稱…」。
+      // (有訂閱數圓點、名稱又長的人才會發生，回報時剛好是管理員)
+      node.style.removeProperty("display");
+      node.style.removeProperty("align-items");
+      node.style.removeProperty("gap");
+      if (badge) {
+        badge.style.verticalAlign = "middle";
+        badge.style.marginLeft = "4px";
+        node.appendChild(badge);
+      }
     }
     delete target.dataset.rnBound;
     this.attachData(node, handle, fullName, subs, isExpired);
