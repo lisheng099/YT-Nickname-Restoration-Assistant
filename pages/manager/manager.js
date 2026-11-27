@@ -26,16 +26,8 @@ const els = {
   batchDeleteBtn: document.getElementById("batchDeleteBtn"),
   batchExpireBtn: document.getElementById("batchExpireBtn"),
 
-  // 名稱快取備份
-  exportBtn: document.getElementById("exportBtn"),
-  importBtn: document.getElementById("importBtn"),
-  importFile: document.getElementById("importFile"),
+  // 名稱快取清除
   clearBtn: document.getElementById("clearBtn"),
-  modal: document.getElementById("importModal"),
-  importCount: document.getElementById("importCount"),
-  btnTrust: document.getElementById("btnTrust"),
-  btnSafe: document.getElementById("btnSafe"),
-  btnCancel: document.getElementById("btnCancel"),
 
   // 暱稱與備註備份
   notesExportBtn: document.getElementById("notesExportBtn"),
@@ -232,6 +224,15 @@ function renderList() {
     editBtn.textContent = I18n.t("notes_edit");
     editBtn.onclick = () => openEditModal(row);
     tdAction.appendChild(editBtn);
+    const refetchTarget = row.handle || (row.cacheId && row.cacheId.startsWith("@") ? row.cacheId : "");
+    if (refetchTarget) {
+      const refetchBtn = document.createElement("button");
+      refetchBtn.className = "btn btn-sm refetch-btn";
+      refetchBtn.textContent = "↻";
+      refetchBtn.title = I18n.t("scraper_lab") || "重新抓取頻道名稱";
+      refetchBtn.onclick = () => refetchHandle(refetchTarget, refetchBtn);
+      tdAction.appendChild(refetchBtn);
+    }
     if (row.inCache) {
       if (!row.isExpired) {
         const expBtn = document.createElement("button");
@@ -524,86 +525,24 @@ function closeEditModal() {
   addMode = false;
 }
 
-// ==================== 備份：名稱快取 (格式不變) ====================
+// ==================== 單列強制重新抓取 ====================
 
-async function handleExport() {
-  const backup = await DataManager.generateBackup();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `yt_names_backup_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function handleImportFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const json = JSON.parse(e.target.result);
-      let dataToImport = json;
-      if (json.meta && json.data) {
-        const isValid = await DataManager.verifyChecksum(json);
-        if (!isValid && !confirm(I18n.t("import_checksum_fail_confirm"))) {
-          els.importFile.value = "";
-          return;
-        }
-        dataToImport = json.data;
-      }
-      let count = 0;
-      for (const val of Object.values(dataToImport)) {
-        if (val && (val.name || typeof val === "string")) count++;
-      }
-      if (count === 0) throw new Error(I18n.t("import_invalid_data"));
-      pendingImportData = dataToImport;
-      els.importCount.textContent = String(count);
-      els.modal.classList.add("active");
-    } catch {
-      alert(I18n.t("import_fail") + I18n.t("import_format_error"));
-      els.importFile.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-async function finalizeImport(isTrusted) {
-  if (!pendingImportData) return;
-
-  const processingBtn = isTrusted ? els.btnTrust : els.btnSafe;
-  const originalNodes = Array.from(processingBtn.childNodes).map((n) => n.cloneNode(true));
-
-  els.btnTrust.disabled = true;
-  els.btnSafe.disabled = true;
-  els.btnCancel.disabled = true;
-
-  processingBtn.textContent = I18n.t("importing");
-  processingBtn.style.opacity = "0.7";
-
+async function refetchHandle(handle, btn) {
+  if (!handle) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
   try {
-    await new Promise((r) => requestAnimationFrame(r));
-    const count = await DataManager.importData(pendingImportData, isTrusted);
-    els.modal.classList.remove("active");
-
-    setTimeout(() => {
-      alert(I18n.t("import_success", { count }));
-      loadAll();
-    }, 50);
-  } catch (err) {
-    console.error(err);
-    alert(I18n.t("import_fail") + err.message);
+    const res = await sendMsg({ type: "FETCH_CHANNEL_INFO", handle, refresh: true });
+    if (res && res.success) {
+      await loadAll();
+    } else {
+      const err = (res && res.error) || "Unknown";
+      alert(`${I18n.t("status_fail") || "抓取失敗"}: ${err}`);
+    }
   } finally {
-    els.importFile.value = "";
-    pendingImportData = null;
-
-    els.btnTrust.disabled = false;
-    els.btnSafe.disabled = false;
-    els.btnCancel.disabled = false;
-    processingBtn.replaceChildren(...originalNodes);
-    processingBtn.style.opacity = "1";
-    els.modal.classList.remove("active");
+    btn.disabled = false;
+    btn.textContent = origText;
   }
 }
 
@@ -664,15 +603,6 @@ els.selectAll.onchange = (e) => {
 };
 els.batchDeleteBtn.onclick = batchDelete;
 els.batchExpireBtn.onclick = batchExpire;
-els.exportBtn.onclick = handleExport;
-els.importBtn.onclick = () => els.importFile.click();
-els.importFile.onchange = handleImportFile;
-els.btnTrust.onclick = () => finalizeImport(true);
-els.btnSafe.onclick = () => finalizeImport(false);
-els.btnCancel.onclick = () => {
-  els.modal.classList.remove("active");
-  els.importFile.value = "";
-};
 els.clearBtn.onclick = clearAllData;
 els.refreshBtn.onclick = loadAll;
 els.addBtn.onclick = openAddModal;
