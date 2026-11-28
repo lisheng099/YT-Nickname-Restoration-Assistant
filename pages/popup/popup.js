@@ -274,3 +274,15 @@ async function init() {
 }
 
 init();
+
+// 名稱還原總開關：切換後立即生效 (不必按儲存、不必重新整理)，存在獨立的鍵值
+const restoreNamesInput = document.getElementById("restoreNamesInput");
+if (restoreNamesInput) {
+  const restoreKey = (window.AppConfig && window.AppConfig.RESTORE_NAMES_KEY) || "yt_realname_restore_names";
+  chrome.storage.local.get([restoreKey], (res) => {
+    restoreNamesInput.checked = res[restoreKey] !== false;
+  });
+  restoreNamesInput.addEventListener("change", () => {
+    chrome.storage.local.set({ [restoreKey]: restoreNamesInput.checked });
+  });
+}

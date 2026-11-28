@@ -22,6 +22,9 @@ const BgFetcher = {
   // 使用方式：在背景頁面的 Console 輸入 BgFetcher.SIMULATE_ERROR = 'PARSE'
   SIMULATE_ERROR: null, // 可選值: null (正常), 'NETWORK' (網路錯誤), 'PARSE' (解析失敗)
 
+  // 名稱還原總開關關閉時不再自動抓名稱 (使用者在觀眾資料頁手動重新抓取除外)
+  namesOff: false,
+
   speedMode: "NORMAL",
   maxConcurrency: 3,
   activeWorkers: 0,
@@ -33,8 +36,9 @@ const BgFetcher = {
   INITIAL_POLL_DELAY: { MIN: 60, MAX: 150 },
 
   init: function () {
-    chrome.storage.local.get([AppConfig.FETCH_SPEED_KEY, AppConfig.FUSE_BE_KEY], (res) => {
+    chrome.storage.local.get([AppConfig.FETCH_SPEED_KEY, AppConfig.FUSE_BE_KEY, AppConfig.RESTORE_NAMES_KEY], (res) => {
       this.updateSpeedMode(res[AppConfig.FETCH_SPEED_KEY]);
+      this.namesOff = res[AppConfig.RESTORE_NAMES_KEY] === false;
       
       // 初始化後端保險絲狀態
       if (res[AppConfig.FUSE_BE_KEY]) {
@@ -46,6 +50,10 @@ const BgFetcher = {
       if (area === "local") {
         if (changes[AppConfig.FETCH_SPEED_KEY]) {
           this.updateSpeedMode(changes[AppConfig.FETCH_SPEED_KEY].newValue);
+        }
+        if (changes[AppConfig.RESTORE_NAMES_KEY]) {
+          this.namesOff = changes[AppConfig.RESTORE_NAMES_KEY].newValue === false;
+          if (this.namesOff) this.dropQueued({ error: "Name restore off", status: 503 });
         }
         // 監聽後端保險絲狀態變更
         if (changes[AppConfig.FUSE_BE_KEY]) {
@@ -159,6 +167,11 @@ const BgFetcher = {
         resolve({ error: "Fuse Tripped", status: 503 });
         return;
       }
+      // 名稱還原關閉：只接受手動重新抓取
+      if (this.namesOff && !forceRefresh) {
+        resolve({ error: "Name restore off", status: 503 });
+        return;
+      }
 
       if (tabId && !this.tabQuotas.has(tabId)) {
         this.tabQuotas.set(tabId, this.initialPollQuota);
@@ -239,6 +252,14 @@ const BgFetcher = {
       else this.queue.high.push(task);
       Logger.info(`[Promote] ${task.handle} 優先權提升至首位`);
     }
+  },
+
+  // 名稱還原關閉時：排隊中還沒送出的請求直接回覆，不再連線
+  dropQueued: function (result) {
+    const tasks = [...this.queue.high, ...this.queue.low];
+    this.queue.high = [];
+    this.queue.low = [];
+    tasks.forEach((t) => this.settleTask(t.key, result));
   },
 
   processQueue: function () {
