@@ -480,6 +480,7 @@ const TooltipManager = {
   getBadgeIcon: function (subs) {
     if (!subs || subs < 500) return null;
     const i = document.createElement("i");
+    i.className = "rn-subs-badge"; // scanner.revertAll() removes these when name restoring is turned off
     Object.assign(i.style, {
       display: "inline-block",
       width: "8px",

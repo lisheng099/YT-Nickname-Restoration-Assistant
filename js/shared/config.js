@@ -19,6 +19,10 @@ globalScope.AppConfig = {
   // 「自訂暱稱與備註」功能的開關狀態鍵值 (預設開啟)
   LOCAL_NOTES_KEY: "yt_realname_local_notes",
 
+  // 「還原聊天室與留言區的名稱」總開關 (false = 關閉；沒有值 = 開啟)
+  // 關閉時頁面掃描器停止、背景不再自動向 YouTube 抓名稱，已替換的名稱即時還原；名稱快取保留
+  RESTORE_NAMES_KEY: "yt_realname_restore_names",
+
   // 「抓取速度」模式的儲存鍵值 (NORMAL / SLOW)
   FETCH_SPEED_KEY: "yt_realname_fetch_speed",
 

@@ -173,7 +173,9 @@ class PageScanner {
         this.loadConfig().then(() => {
           this.triggerBurstReset();
           // 確保在設定載入完成後，且保險絲正常才啟動
-          if (this.fuseFrontendStatus === "NORMAL") {
+          if (!this.restoreNames) {
+            if (typeof Logger !== "undefined") Logger.info("[Scanner] 名稱還原已關閉，跳過掃描。");
+          } else if (this.fuseFrontendStatus === "NORMAL") {
             this.startObservation();
           } else {
             if (typeof Logger !== "undefined") Logger.info("[Scanner] 初始化時偵測到前端保險絲熔斷，跳過掃描。");
@@ -197,11 +199,13 @@ class PageScanner {
          resolve();
          return;
       }
-      const { SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY } = window.AppConfig;
+      const { SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY, RESTORE_NAMES_KEY } = window.AppConfig;
 
       chrome.storage.local.get(
-        [SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY],
+        [SETTINGS_KEY, CLICK_TO_COPY_KEY, FUSE_FE_KEY, RESTORE_NAMES_KEY],
         (res) => {
+          // 名稱還原總開關 (沒有值 = 開啟)
+          this.restoreNames = res[RESTORE_NAMES_KEY] !== false;
           // 載入基本設定
           const settings = res[SETTINGS_KEY];
           if (settings && settings.maxLength) {
@@ -234,6 +238,16 @@ class PageScanner {
               changes[CLICK_TO_COPY_KEY].newValue === true
             );
           }
+          // 名稱還原總開關：關閉時停止掃描並把已替換的名稱還原，開啟時重新掃描
+          if (changes[RESTORE_NAMES_KEY]) {
+            this.restoreNames = changes[RESTORE_NAMES_KEY].newValue !== false;
+            if (this.restoreNames) {
+              if (this.fuseFrontendStatus === "NORMAL") this.startObservation();
+            } else {
+              this.stopObservation();
+              this.revertAll();
+            }
+          }
           // [新增] 監聽前端保險絲變化
           if (changes[FUSE_FE_KEY]) {
             this.fuseFrontendStatus =
@@ -252,15 +266,67 @@ class PageScanner {
       if (typeof Logger !== "undefined")
         Logger.red("[Scanner] 前端保險絲已熔斷，停止 UI 渲染。");
     } else {
-      // 重置錯誤計數並重啟
+      // 重置錯誤計數並重啟 (名稱還原關閉時維持停止)
       this.frontendErrorCount = 0;
-      this.startObservation();
+      if (this.restoreNames) this.startObservation();
+    }
+  }
+
+  // 名稱還原關閉時：把頁面上已替換的名稱還原成 YouTube 原本的文字，並拿掉訂閱數圓點與滑鼠提示
+  revertAll() {
+    try {
+      const textOf = (el) => el.dataset.rnHandle || el.dataset.rnTargetHandle || "";
+      // 雙節點 (預設)：原生文字收在隱藏容器裡，直接放回來
+      document.querySelectorAll("[data-rn-dual]").forEach((el) => TooltipManager.restoreDual(el));
+      // 包裹模式 (投票等)：拿掉上方的名稱與外層容器
+      document.querySelectorAll(".rn-poll-wrapper").forEach((wrapper) => {
+        const parent = wrapper.parentNode;
+        Array.from(wrapper.childNodes).forEach((child) => {
+          if (child.nodeType === 1 && child.classList.contains("rn-poll-inserted-name")) return;
+          if (child.nodeType === 1) {
+            child.style.marginLeft = wrapper.style.marginLeft;
+            child.style.marginRight = wrapper.style.marginRight;
+          }
+          parent.insertBefore(child, wrapper);
+        });
+        wrapper.remove();
+      });
+      document.querySelectorAll('[data-rn-replaced="yes"]').forEach((el) => {
+        const mode = el.dataset.rnMode || this.MODE.STANDARD;
+        if (mode === this.MODE.EMBEDDED) {
+          // 嵌入模式：句子中間的名稱換回 handle
+          el.querySelectorAll("[data-rn-handle]").forEach((span) => span.replaceWith(document.createTextNode(textOf(span))));
+          el.querySelectorAll(".rn-subs-badge").forEach((b) => b.remove());
+          el.normalize();
+        } else if (mode === this.MODE.STANDARD) {
+          // 標準替換：名稱與圓點換回 handle (保留放在名稱元素裡的自訂暱稱 [data-rn-own])
+          const handle = textOf(el);
+          if (handle && el.querySelector("[data-rn-span]")) {
+            const own = Array.from(el.childNodes).filter((c) => c.nodeType === 1 && c.hasAttribute("data-rn-own"));
+            el.replaceChildren(document.createTextNode(handle), ...own);
+          }
+        }
+      });
+      document.querySelectorAll(".rn-subs-badge").forEach((b) => b.remove());
+      document.querySelectorAll("[data-rn-replaced], [data-rn-bound], [data-rn-fetching], [data-rn-target-handle]").forEach((el) => {
+        delete el.dataset.rnReplaced;
+        delete el.dataset.rnBound;
+        delete el.dataset.rnFetching;
+        delete el.dataset.rnTargetHandle;
+        delete el.dataset.rnExpired;
+        delete el.dataset.rnHandle;
+        delete el.dataset.rnName;
+        delete el.dataset.rnSubs;
+      });
+      if (typeof TooltipManager.hide === "function") TooltipManager.hide();
+    } catch (e) {
+      if (typeof Logger !== "undefined") Logger.red("[Scanner] 還原名稱失敗", e);
     }
   }
 
   startObservation() {
-    // 檢查前端保險絲
-    if (this.isScanning || this.fuseFrontendStatus === "TRIPPED") return;
+    // 檢查前端保險絲與名稱還原總開關
+    if (this.isScanning || this.fuseFrontendStatus === "TRIPPED" || this.restoreNames === false) return;
     this.isScanning = true;
 
     if (typeof Logger !== "undefined") {
@@ -603,8 +669,8 @@ class PageScanner {
 
 // === 使用 DataBridge 更新元素 ===
   updateElement(handle, element) {
-    // 如果前端保險絲熔斷，這裡也不該發送請求或進行更新
-    if (this.fuseFrontendStatus === "TRIPPED") return;
+    // 如果前端保險絲熔斷或名稱還原已關閉，這裡也不該發送請求或進行更新
+    if (this.fuseFrontendStatus === "TRIPPED" || this.restoreNames === false) return;
 
     if (handle.includes("\n")) handle = handle.split("\n")[0].trim();
 
@@ -615,8 +681,8 @@ class PageScanner {
     // 呼叫 DataBridge
     DataBridge.getData(handle, (data) => {
       try {
-        // 即使資料回來了，渲染前最後一次檢查保險絲
-        if (this.fuseFrontendStatus === "TRIPPED") {
+        // 即使資料回來了，渲染前最後一次檢查保險絲與總開關
+        if (this.fuseFrontendStatus === "TRIPPED" || this.restoreNames === false) {
             delete element.dataset.rnFetching; // 雖然不渲染，但移除標記以免卡住
             return;
         }
@@ -720,8 +786,8 @@ class PageScanner {
       if (location.href === lastUrl) return;
       lastUrl = location.href;
       this.triggerBurstReset();
-      // 只有前端保險絲未熔斷時才重新掃描
-      if (this.fuseFrontendStatus === "NORMAL") {
+      // 只有前端保險絲未熔斷、名稱還原開著時才重新掃描
+      if (this.fuseFrontendStatus === "NORMAL" && this.isScanning) {
         setTimeout(() => this.scanDeep(document.body), 1500);
       }
     };
