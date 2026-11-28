@@ -75,16 +75,26 @@
       }
       #${PANEL_ID} .sm-ln-head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 8px;
       }
+      #${PANEL_ID} .sm-ln-titlebox {
+        flex: 1;
+        min-width: 0;
+      }
       #${PANEL_ID} .sm-ln-title {
+        display: block;
         font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      #${PANEL_ID} .sm-ln-sub {
+        font-size: 11px;
+        opacity: 0.7;
+        word-break: break-all;
       }
       #${PANEL_ID} .sm-ln-close {
         border: none;
@@ -397,6 +407,18 @@
     const title = document.createElement("span");
     title.className = "sm-ln-title";
     title.textContent = id.displayName || key;
+    // 頻道名稱一行，@handle 與頻道 ID 各自一行 (與主播版、管理頁相同)
+    const titleBox = document.createElement("div");
+    titleBox.className = "sm-ln-titlebox";
+    titleBox.appendChild(title);
+    [id.rawHandle || id.handle, id.channelId]
+      .filter((text) => text && text !== title.textContent)
+      .forEach((text) => {
+        const sub = document.createElement("div");
+        sub.className = "sm-ln-sub";
+        sub.textContent = text;
+        titleBox.appendChild(sub);
+      });
     const tools = document.createElement("span");
     tools.className = "sm-ln-tools";
     const url = channelUrl(id);
@@ -443,7 +465,7 @@
     closeBtn.setAttribute("aria-label", I18n.t("notes_close") || "關閉");
     closeBtn.addEventListener("click", closePanel);
     tools.appendChild(closeBtn);
-    head.append(title, tools);
+    head.append(titleBox, tools);
 
     const nickLabel = document.createElement("label");
     nickLabel.textContent = I18n.t("local_custom_nickname") || "自訂暱稱";
