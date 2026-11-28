@@ -17,21 +17,44 @@ const BgCache = {
   init: async function () {
     await this.tryMigrateFromV1();
     this.syncSettingsAndPrune();
+    this.watchDeleteDays();
     Logger.info("[BgCache] IndexedDB (Buffered) 模式已啟動");
   },
 
   // === 設定同步與自動清理 ===
-  syncSettingsAndPrune: function () {
+  // 背景程式（MV3 service worker）閒置 30 秒就會被關掉、之後再被喚醒，一天可能啟動上百次；
+  // 清理要掃過整個名稱快取，所以每次啟動只檢查「距上次清理是否已滿一天」，另外在使用者改了保留天數時立刻清一次。
+  PRUNE_EVERY_MS: 24 * 60 * 60 * 1000,
+  LAST_PRUNE_KEY: "yt_realname_last_prune",
+
+  syncSettingsAndPrune: function (force) {
     // 檢查 AppConfig 是否存在，避免在某些環境報錯
     if (typeof AppConfig === "undefined") return;
     const { SETTINGS_KEY, DEFAULT_DELETE_DAYS } = AppConfig;
 
-    chrome.storage.local.get(SETTINGS_KEY, async (res) => {
+    chrome.storage.local.get([SETTINGS_KEY, this.LAST_PRUNE_KEY], async (res) => {
+      const last = Number(res[this.LAST_PRUNE_KEY]) || 0;
+      const now = Date.now();
+      // last > now：電腦時鐘被調回過，照樣清理
+      if (!force && last && last <= now && now - last < this.PRUNE_EVERY_MS) return;
       const settings = res[SETTINGS_KEY] || {};
       const deleteDays = settings.deleteDays || DEFAULT_DELETE_DAYS;
 
       // 執行清理 (刪除超過 DeleteDays 的資料)
       await this.pruneOldData(deleteDays);
+      chrome.storage.local.set({ [this.LAST_PRUNE_KEY]: now });
+    });
+  },
+
+  // 使用者改了保留天數：立刻依新設定清理
+  watchDeleteDays: function () {
+    if (typeof AppConfig === "undefined" || !chrome.storage || !chrome.storage.onChanged) return;
+    const { SETTINGS_KEY } = AppConfig;
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[SETTINGS_KEY]) return;
+      const before = (changes[SETTINGS_KEY].oldValue || {}).deleteDays;
+      const after = (changes[SETTINGS_KEY].newValue || {}).deleteDays;
+      if (before !== after) this.syncSettingsAndPrune(true);
     });
   },
 
